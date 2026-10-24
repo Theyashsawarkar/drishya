@@ -856,7 +856,9 @@ class Library(View):
         if self.path is None:
             return
         dirs = [d.rstrip("/") for d in self.core.conf["video_dirs"]]
-        parent = None if self.path.rstrip("/") in dirs else os.path.dirname(self.path.rstrip("/"))
+        parent = os.path.dirname(self.path.rstrip("/"))
+        if self.path.rstrip("/") in dirs or parent in dirs:
+            parent = None   # one of your video folders: that's the top (with Continue watching)
         self.open(parent, select=self.path)
 
     def key(self, k, n):
@@ -876,7 +878,7 @@ class Library(View):
             self._select(len(self.cards) - 1)
         elif k == "Return":
             self._enter()
-        elif k in ("BackSpace", "-"):
+        elif k == "BackSpace":
             self._up()
         elif k in ("a", "A") and self.cards:
             d = self.cards[self.sel][0]

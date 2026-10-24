@@ -99,7 +99,7 @@
 - Python 3.11+, PyGObject, GTK 4
 - [mpv](https://mpv.io) (drishya uses its library, libmpv, which comes with it)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) for YouTube and other sites, ffmpeg for thumbnails and downloads
-- optional: `secret-tool` (libsecret) to remember logins in your keyring, a [Nerd Font](https://www.nerdfonts.com) for the icons
+- optional: `secret-tool` (libsecret) to remember logins in your keyring, `brightnessctl` for the brightness keys, a [Nerd Font](https://www.nerdfonts.com) for the icons
 
 ```sh
 # Arch
@@ -167,7 +167,11 @@ Tabs: `0` Watch, `1` Up next, `2` Library, `3` History, `4` Downloads;
 The footer always shows the keys for where you are; `?` shows them all.
 The same rules everywhere: `/` searches, `Esc` goes back or closes, `j`/`k` move, `h`/`l` go back and in
 (menus, the grid), `Enter` does the main thing, `Tab` switches section; while typing, `Ctrl+j`/`Ctrl+k` move.
-Counts work like vim: `5j`, `3.`.
+Counts work like vim: `5j`, `3.`. A tab number followed by a key that takes no count (or a lone `1`) goes
+to that tab first.
+
+Volume and brightness: `=`/`-` change the system volume and `Ctrl+=`/`Ctrl+-` the screen's brightness
+(pactl or wpctl, and brightnessctl); when the window closes, both go back to how they were.
 
 **Everywhere**
 
@@ -189,7 +193,8 @@ Counts work like vim: `5j`, `3.`.
 | `Enter` | Play the selected video |
 | `. / ,` | Seek forward / back 10 seconds (3. = 30 s) |
 | `> / <` | Play the next / previous video |
-| `= / -` | Raise / lower volume |
+| `= / -` | Raise / lower the system volume (back as it was when the window closes) |
+| `Ctrl+= / Ctrl+-` | Raise / lower the screen brightness (back as it was when the window closes) |
 | `m` | Toggle mute |
 | `f` | Toggle fullscreen (zen: just the video; Esc leaves it too) |
 | `t` | Toggle theater mode (the video without the side panel) |
@@ -236,7 +241,7 @@ Counts work like vim: `5j`, `3.`.
 |---|---|
 | `h / j / k / l` | Move through the grid |
 | `Enter` | Open the folder or play the video (the rest of the folder after it) |
-| `Backspace / -` | Go up a folder |
+| `Backspace` | Go up a folder |
 | `a / A` | Add to the end of the queue / to play next |
 | `R` | Reload the folders |
 
@@ -300,6 +305,8 @@ Counts work like vim: `5j`, `3.`.
 | `Space` | Toggle play / pause |
 | `. / ,` | Seek forward / back 10 seconds |
 | `> / <` | Play the next / previous video |
+| `= / -` | Raise / lower the system volume |
+| `Ctrl+= / Ctrl+-` | Raise / lower the screen brightness |
 | `z / Enter` | Switch back to the full player |
 | `q / Esc` | Close the mini player (pauses) |
 

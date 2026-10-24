@@ -230,9 +230,11 @@ class SearchPanel(Gtk.Box):
     def set_scope(self, i):
         text = self.entry.get_text()
         _, q = self.provider.prefix(text)
+        self.scope = i % len(self.provider.scopes)
+        if self.provider.scopes[self.scope] == "Commands":
+            q = ""   # words searched for aren't a command: list them all, ready to type one
         if q != text:
             self.entry.set_text(q)   # a typed prefix gives way to the chosen scope
-        self.scope = i % len(self.provider.scopes)
         self._changed()
 
     def _clicked(self, i, n):

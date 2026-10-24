@@ -1,6 +1,7 @@
 """The player window: tabs, the controls, the vim status line, fullscreen
 and theater modes, and the vim key engine (counts, pending keys,
 registers). Laid out like nāda's, so the two feel like one app."""
+import logging
 import os
 import re
 import urllib.request
@@ -30,7 +31,8 @@ from .widgets import G, box, hint, keycap, label
 # keybind: Drishya/everywhere | Enter | Play the selected video
 # keybind: Drishya/everywhere | . / , | Seek forward / back 10 seconds (3. = 30 s)
 # keybind: Drishya/everywhere | > / < | Play the next / previous video
-# keybind: Drishya/everywhere | = / - | Raise / lower volume
+# keybind: Drishya/everywhere | = / - | Raise / lower the system volume (back as it was when the window closes)
+# keybind: Drishya/everywhere | Ctrl+= / Ctrl+- | Raise / lower the screen brightness (back as it was when the window closes)
 # keybind: Drishya/everywhere | m | Toggle mute
 # keybind: Drishya/everywhere | f | Toggle fullscreen (zen: just the video; Esc leaves it too)
 # keybind: Drishya/everywhere | t | Toggle theater mode (the video without the side panel)
@@ -62,7 +64,7 @@ from .widgets import G, box, hint, keycap, label
 # keybind: Drishya/up next | zz | Jump to the video that's playing
 # keybind: Drishya/library | h / j / k / l | Move through the grid
 # keybind: Drishya/library | Enter | Open the folder or play the video (the rest of the folder after it)
-# keybind: Drishya/library | Backspace / - | Go up a folder
+# keybind: Drishya/library | Backspace | Go up a folder
 # keybind: Drishya/library | a / A | Add to the end of the queue / to play next
 # keybind: Drishya/library | R | Reload the folders
 # keybind: Drishya/youtube | a / A | Add the result to the end of the queue / to play next
@@ -89,6 +91,11 @@ from .widgets import G, box, hint, keycap, label
 # keybind: Drishya/sign in | Ctrl+s | Toggle remembering the login in your keyring
 # keybind: Drishya/sign in | Esc | Cancel signing in
 
+log = logging.getLogger("drishya.window")
+# Keys a count can go before (5j, 3., 2dd); after any other key, a lone
+# number is the tab it names.
+COUNTED = {"j", "k", "h", "l", "G", "g", "d", "y", ".", ",", ">", "<", "=", "+", "-", "[", "]", "{", "}", "J", "K",
+           "x", "p", "P", "u", "C-d", "C-u", "C-r", "Page_Down", "Page_Up", "D", "A", "a"}
 TABS = ["watch", "queue", "library", "history", "downloads"]   # YouTube's results: a page, from the search panel
 KEYNAMES = {"space": " ", "period": ".", "comma": ",", "greater": ">", "less": "<", "equal": "=", "plus": "+",
             "minus": "-", "slash": "/", "colon": ":", "question": "?", "KP_Enter": "Return", "Up": "k", "Down": "j",
@@ -99,7 +106,8 @@ HELP = [
                      ("h j k l", "grid (library)"), ("0–4", "watch, up next, library…"), ("Ctrl+Tab", "next tab"),
                      ("Esc", "back / close")]),
     ("Play", [("space", "play / pause"), ("Enter", "play the selected"), (". ,", "±10 s"), ("h l", "±5 s (watch)"),
-              ("> <", "next / previous video"), ("= - m", "volume, mute"), ("S", "start over"),
+              ("> <", "next / previous video"), ("= - m", "volume, mute"), ("Ctrl+= Ctrl+-", "brightness"),
+              ("S", "start over"),
               ("M", "autoplay on/off")]),
     ("Video", [("f", "fullscreen (zen)"), ("t", "theater"), ("z", "mini player"), ("Q", "settings menu"),
                ("c", "subtitles"), ("#", "audio track"), ("[ ] \\", "speed, normal"), ("{ }", "chapters"),
@@ -209,6 +217,9 @@ class Window(Gtk.ApplicationWindow):
         self.search.set_margin_top(64)
         self.search.set_visible(False)
         overlay.add_overlay(self.search)
+        # toasts above everything, the search panel included
+        overlay.remove_overlay(self.toast_rev)
+        overlay.add_overlay(self.toast_rev)
         GLib.timeout_add_seconds(2, lambda: (self.finder.refresh_index(), False)[1])
         self.login = self._login_panel()
         self.login.set_visible(False)
@@ -572,6 +583,7 @@ class Window(Gtk.ApplicationWindow):
         (self.theaterbtn.add_css_class if self.theater else self.theaterbtn.remove_css_class)("on")
 
     def set_mode(self, mode):
+        log.debug("mode %s", mode)
         self.mode = mode
         self.modelab.set_text(mode)
         for m in ("visual", "search", "command", "confirm", "login", "settings"):
@@ -749,12 +761,27 @@ class Window(Gtk.ApplicationWindow):
             self.unfullscreen()
         self.set_visible(False)
         self.core.window_visible = False
-        if self.core.conf["pause_on_hide"] and not (self.app.mini and self.app.mini.get_visible()):
-            self.core.pause()
+        if not (self.app.mini and self.app.mini.get_visible()):
+            self.core.restore_system()   # volume and brightness as they were before
+            if self.core.conf["pause_on_hide"]:
+                self.core.pause()
+
+    def adjust(self, what, delta):
+        """The system volume or the screen's brightness (put back when the
+        window closes)."""
+        c = self.core
+        a = c.sys_volume if what == "volume" else c.sys_brightness
+        v = a.change(delta)
+        if v is None:
+            self.toast(f"Can't change the {what} here (needs {'pactl' if what == 'volume' else 'brightnessctl'})")
+            return
+        glyph = G["vol"] if what == "volume" else G["sun"]
+        self.feedback(f"{glyph} {v}%")
 
     # ------------------------------------------------------------ keys
     def _key(self, ctrl, keyval, code, state):
         name = Gdk.keyval_name(keyval) or ""
+        log.debug("key %s state %s", name, int(state))
         ctrl_on = bool(state & Gdk.ModifierType.CONTROL_MASK)
         if ctrl_on and name in ("Tab", "ISO_Left_Tab"):
             back = name == "ISO_Left_Tab" or bool(state & Gdk.ModifierType.SHIFT_MASK)
@@ -828,6 +855,13 @@ class Window(Gtk.ApplicationWindow):
         if self.digit_timer:
             GLib.source_remove(self.digit_timer)
             self.digit_timer = None
+            # A lone tab number followed by a key that takes no count (V, Esc,
+            # /, Tab…), or a 1 (a count of one changes nothing): the number
+            # meant the tab. Go there, then do the key.
+            if re.fullmatch(r"[1-4]", self.count) and (k not in COUNTED or self.count == "1"):
+                tab, self.count = self.count, ""
+                self._show_pending()
+                self.switch(TABS[int(tab)])
         n = int(self.count or "1")
         had_count = bool(self.count)
         self.count = ""
@@ -923,12 +957,10 @@ class Window(Gtk.ApplicationWindow):
             c.next(n)
         elif k == "<":
             c.prev(n)
-        elif k in ("=", "+"):
-            c.change_volume(c.conf["volume_step"] * n)
-            self.feedback(f"{G['vol']} {c.volume:.0f}")
-        elif k == "-":
-            c.change_volume(-c.conf["volume_step"] * n)
-            self.feedback(f"{G['vol']} {c.volume:.0f}")
+        elif k in ("=", "+", "-"):
+            self.adjust("volume", (-1 if k == "-" else 1) * c.conf["volume_step"] * n)
+        elif k in ("C-=", "C-+", "C--"):
+            self.adjust("brightness", (-1 if k == "C--" else 1) * 5 * n)
         elif k == "m":
             c.mute()
         elif k == "f":

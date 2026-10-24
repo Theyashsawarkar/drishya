@@ -2,6 +2,24 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
+## v0.2.1 -- 2026-10-24
+
+- **Volume and brightness keys**: `=`/`-` change the system volume (what
+  you hear, not only drishya's), `Ctrl+=`/`Ctrl+-` the screen's brightness;
+  in the mini player too. When the window closes (or the mini player, or
+  drishya quits) both go back to how they were before. Through pactl or
+  wpctl and brightnessctl; without them the keys say what's missing.
+- A tab number followed by a key that takes no count (`V`, `Esc`, `/`…),
+  or a lone `1`, goes to that tab first: `1 V` selected on the wrong tab,
+  and `Esc` then closed the window.
+- In the library, `Backspace` from one of your folders goes back to the
+  top (Continue watching); it showed the folder's plain listing. `-` is the
+  volume everywhere now (it went up a folder in the library).
+- Switching the search panel to Commands clears the box and lists every
+  command (it kept the words you'd searched for).
+- Toasts show above the search panel, not under its shade.
+- `DRISHYA_DEBUG=1` logs each key and mode change, for bug reports.
+
 ## v0.2.0 -- 2026-10-24
 
 - **Video first.** The controls float over the video and fade after

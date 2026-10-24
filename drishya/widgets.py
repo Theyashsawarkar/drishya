@@ -16,7 +16,7 @@ G = {
     "yt": "\U000f05c3", "radio": "\U000f0439", "watch": "\U000f0567", "queue": "\U000f0cb8", "lib": "\U000f0fce",
     "history": "\U000f02da", "search": "\U000f0349", "folder": "\U000f024b", "film": "\U000f0231",
     "warn": "\U000f0026", "check": "\U000f012c", "full": "\U000f0293", "unfull": "\U000f0294", "cc": "\U000f0a6e",
-    "speed": "\U000f04c5", "lock": "\U000f033e", "theater": "\U000f0379", "pip": "\U000f0a2e", "chapter": "\U000f0c7f",
+    "speed": "\U000f04c5", "lock": "\U000f033e", "sun": "\U000f00e0", "theater": "\U000f0379", "pip": "\U000f0a2e", "chapter": "\U000f0c7f",
 }
 
 

@@ -10,7 +10,7 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from drishya import auth, config, library, store, util, youtube  # noqa: E402
+from drishya import auth, config, library, store, system, util, youtube  # noqa: E402
 
 
 class Config(unittest.TestCase):
@@ -161,6 +161,45 @@ class Links(unittest.TestCase):
         from drishya.mpv import quote
         self.assertEqual(quote("p,a=ss"), "%6%p,a=ss")
         self.assertEqual(quote("ü"), "%2%ü")   # bytes, not characters
+
+
+class FakeControl:
+    name = "fake"
+
+    def __init__(self, value):
+        self.value, self.sets = value, []
+
+    def available(self):
+        return True
+
+    def get(self):
+        return self.value
+
+    def set(self, v):
+        self.value = max(0, min(100, v))
+        self.sets.append(self.value)
+        return self.value
+
+
+class VolumeAndBrightness(unittest.TestCase):
+    def test_back_to_how_it_was(self):
+        ctl = FakeControl(60)
+        a = system.Adjust(ctl)
+        self.assertEqual(a.change(+5), 65)
+        self.assertEqual(a.change(+5), 70)
+        self.assertEqual(a.change(-15), 55)
+        self.assertTrue(a.restore())
+        self.assertEqual(ctl.value, 60)
+        self.assertFalse(a.restore())    # nothing changed since: nothing to put back
+
+    def test_untouched_is_left_alone(self):
+        ctl = FakeControl(60)
+        self.assertFalse(system.Adjust(ctl).restore())
+        self.assertEqual(ctl.sets, [])
+
+    def test_clamped(self):
+        a = system.Adjust(FakeControl(98))
+        self.assertEqual(a.change(+10), 100)
 
 
 class SignIn(unittest.TestCase):

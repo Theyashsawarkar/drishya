@@ -15,7 +15,7 @@ import time
 
 from gi.repository import GLib
 
-from . import auth, config, library, mpv, store, youtube
+from . import auth, config, library, mpv, store, system, youtube
 from .util import dl_key, fmt_time, is_stream_url, stream_title, track_name, ytdl_raw_options  # noqa: F401
 
 log = logging.getLogger("drishya.core")
@@ -78,6 +78,10 @@ class Core:
         self.jobs = []                # downloads: dicts with yt title channel pct state path error
         self._job_lock = threading.Lock()
         self._job_thread = None
+        # the system's volume and the screen's brightness, as drishya's keys
+        # change them; put back as they were when the window closes
+        self.sys_volume = system.Adjust(system.Volume())
+        self.sys_brightness = system.Adjust(system.Brightness())
         self.surface = None           # the VideoArea that holds mpv's renderer
         self.render_ready = False
         self._pending = None          # a load waiting for the renderer
@@ -1030,8 +1034,16 @@ class Core:
         self.jobs = [j for j in self.jobs if j["key"] != key]
         self.emit("downloads", "queue")
 
+    # ------------------------------------------------------------ volume and brightness
+    def restore_system(self):
+        """The volume and brightness back to how they were before drishya
+        changed them (the window closed, or drishya quit)."""
+        changed = [a.ctl.name for a in (self.sys_volume, self.sys_brightness) if a.restore()]
+        return changed
+
     # ------------------------------------------------------------ the end
     def shutdown(self):
+        self.restore_system()
         self._save_position()
         self.store.flush()
         self._save_queue()

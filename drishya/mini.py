@@ -9,6 +9,8 @@ from .widgets import G, VideoArea, box, label
 # keybind: Drishya/mini player | Space | Toggle play / pause
 # keybind: Drishya/mini player | . / , | Seek forward / back 10 seconds
 # keybind: Drishya/mini player | > / < | Play the next / previous video
+# keybind: Drishya/mini player | = / - | Raise / lower the system volume
+# keybind: Drishya/mini player | Ctrl+= / Ctrl+- | Raise / lower the screen brightness
 # keybind: Drishya/mini player | z / Enter | Switch back to the full player
 # keybind: Drishya/mini player | q / Esc | Close the mini player (pauses)
 
@@ -76,6 +78,7 @@ class Mini(Gtk.Window):
         self.set_visible(False)
         self.area.detach()
         self.core.pause()
+        self.core.restore_system()   # volume and brightness as they were before
 
     def _key(self, _c, keyval, _code, state):
         name = Gdk.keyval_name(keyval) or ""
@@ -92,6 +95,12 @@ class Mini(Gtk.Window):
             c.next()
         elif name == "less":
             c.prev()
+        elif name in ("equal", "plus", "minus"):
+            ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+            a = c.sys_brightness if ctrl else c.sys_volume
+            v = a.change((-5 if name == "minus" else 5) if ctrl else (-1 if name == "minus" else 1) * c.conf["volume_step"])
+            if v is not None:
+                self.title.set_text(f"{G['sun'] if ctrl else G['vol']} {v}%")
         elif name in ("z", "Return"):
             self.app.show_full()
         elif name in ("q", "Escape"):
