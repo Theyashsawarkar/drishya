@@ -1,0 +1,25 @@
+name: Bug report
+description: Something in drishya doesn't work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `drishya --version`, `yt-dlp --version`, `mpv --version | head -1`, your desktop and distribution.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Daemon log
+      description: Anything relevant from the daemon's log, `journalctl --user -u drishya -u drishya-daemon -b` (a Traceback especially; without systemd, `~/.local/state/drishya/daemon.log`).
+      render: text

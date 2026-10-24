@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>drishya · A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads.</title>
+<meta name="description" content="A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads.">
+<meta property="og:title" content="drishya · A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads.">
+<meta property="og:description" content="A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads.">
+<meta name="theme-color" content="#11111b">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>:root{--accent:#89dceb;--glow:#89dceb33}</style>
+</head>
+<body>
+<header class="top"><div class="in">
+<a class="brand" href="index.html"><img src="assets/logo.svg" alt=""><span>drishya <small>दृश्य</small></span></a>
+<nav><a href="index.html" class="on">Overview</a><a href="changelog.html" class="">Changelog</a><a href="adr/index.html" class=" hide">Decisions</a><a class="gh" href="https://github.com/Theyashsawarkar/drishya">GitHub ↗</a></nav></div></header>
+<section class="hero"><div class="in"><div>
+<div class="eyebrow">video player</div>
+<h1>drishya</h1>
+<div class="sa">दृश्य <span>· “sight”</span></div>
+<p class="lead">A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads.</p>
+<div class="cta"><a class="btn primary" href="#install">Install</a><a class="btn" href="https://github.com/Theyashsawarkar/drishya">GitHub ↗</a>
+<a class="btn" href="changelog.html">What's new in v0.1.0</a></div>
+<div class="meta"><span><b>v0.1.0</b> latest</span><span><b>1</b> releases</span><span><b>4</b> decisions recorded</span><span><b>MIT</b> license</span></div>
+</div><img class="logo" src="assets/logo.svg" alt="drishya logo"></div></section>
+<div class="wrap"><aside class="toc"><b>On this page</b><a class="l2" href="#features">Features</a><a class="l2" href="#install">Install</a><a class="l3" href="#requirements">Requirements</a><a class="l3" href="#drishya">drishya</a><a class="l2" href="#usage">Usage</a><a class="l2" href="#keys">Keys</a><a class="l2" href="#commands">Commands</a><a class="l2" href="#links-streams-and-signing-in">Links, streams and signing in</a><a class="l2" href="#configuration">Configuration</a><a class="l2" href="#how-it-works">How it works</a><a class="l2" href="#troubleshooting">Troubleshooting</a><a class="l2" href="#contributing">Contributing</a><a class="l2" href="#license">License</a></aside><article>
+<p align="center">
+  <img alt="Watching a YouTube video: the video on the left, its title, channel and views, quality and chapter on the right with what plays next, the controls and keys below" src="assets/screenshots/watch.png" width="80%">
+</p>
+<blockquote><p><em>Dṛśya</em> (दृश्य) is Sanskrit for "sight, what is seen". It's the sibling of <a href="https://github.com/Theyashsawarkar/nada">nāda</a> ("sound"), the music player: same keys, same look.</p></blockquote>
+<h2 id="features"><a class="anchor" href="#features">#</a>Features</h2>
+<ul><li><strong>The video in the window</strong>: mpv's renderer draws into the app (libmpv), with hardware decoding. <code>f</code> for fullscreen, <code>t</code> for theater mode, <code>z</code> for a mini player in the corner while you work.</li><li><strong>YouTube without an account</strong>: search on tab <code>3</code>, every result with its thumbnail, channel, views and length. What plays after it is what YouTube would play (autoplay, <code>M</code> turns it off).</li><li><strong>Any link</strong>: <code>o</code> and paste. HLS (<code>.m3u8</code>) and DASH streams from any server, a video file over HTTP, live streams, and the <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md">sites yt-dlp plays</a>. A stream's qualities are capped like YouTube's.</li><li><strong>Signs in when it has to</strong>: a server that asks for a username and password gets a sign-in panel; sites that need an account can borrow your browser's login. Logins you choose to remember go to your keyring.</li><li><strong>Your library</strong>: your video folders in columns (like yazi), episodes in order (<code>S01E02</code>, "Episode 10" after "Episode 9"), thumbnails, and the next episode lined up after the one you play.</li><li><strong>Resume and history</strong>: every video starts where you stopped. History (<code>4</code>) has a <em>Continue watching</em> list, with a red bar for how much you've seen.</li><li><strong>Up next, edited like text</strong>: <code>dd</code> removes, <code>J</code>/<code>K</code> move, <code>yy</code>/<code>p</code> copy and paste, <code>V</code> selects several, <code>u</code> undoes, <code>Ctrl+r</code> redoes.</li><li><strong>Pick the quality</strong> (<code>Q</code>, or the <code>1080p</code> button): what YouTube offers for this video (4K down to 144p) or a stream's own qualities. Your pick stays for the next videos and for downloads.</li><li><strong>Downloads with subtitles</strong>: <code>D</code> (or the download button) saves a video (YouTube or any link) at your quality, with its subtitles, chapters and thumbnail; it then plays from your disk.</li><li><strong>Subtitles, audio tracks, speed, chapters</strong>: <code>c</code>, <code>#</code>, <code>[</code> <code>]</code>, <code>{</code> <code>}</code>. Subtitles are real captions in your languages, never YouTube's machine translations.</li><li><strong>Everywhere on the desktop</strong>: MPRIS for media keys, <code>playerctl</code> and your phone (KDE Connect); <code>drishya ctl</code> and <code>drishya play</code> for scripts.</li><li><strong>In your theme</strong>: <a href="https://github.com/Theyashsawarkar/varna">varna</a>'s colours when you have it, the glass of <a href="https://github.com/Theyashsawarkar/vyom">Vyom</a>'s panels; Catppuccin Mocha without.</li></ul>
+<p align="center">
+  <img alt="Up next: what you watched dimmed with a red progress bar, the playing video, then yours, with a HLS stream, files and a saved YouTube video" src="assets/screenshots/queue.png" width="49%">
+  <img alt="The library: folders on the left, a show's episodes in order with thumbnails and lengths" src="assets/screenshots/library.png" width="49%">
+</p>
+<h2 id="install"><a class="anchor" href="#install">#</a>Install</h2>
+<h3 id="requirements"><a class="anchor" href="#requirements">#</a>Requirements</h3>
+<ul><li>Python 3.11+, PyGObject, GTK 4</li><li><a href="https://mpv.io">mpv</a> (drishya uses its library, libmpv, which comes with it)</li><li><a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> for YouTube and other sites, ffmpeg for thumbnails and downloads</li><li>optional: <code>secret-tool</code> (libsecret) to remember logins in your keyring, a <a href="https://www.nerdfonts.com">Nerd Font</a> for the icons</li></ul>
+<pre class="code" data-lang="sh"><code># Arch
+sudo pacman -S --needed python-gobject gtk4 mpv yt-dlp ffmpeg libsecret ttf-jetbrains-mono-nerd
+# Debian / Ubuntu
+sudo apt install python3-gi gir1.2-gtk-4.0 libmpv2 yt-dlp ffmpeg libsecret-tools</code></pre>
+<h3 id="drishya"><a class="anchor" href="#drishya">#</a>drishya</h3>
+<pre class="code" data-lang="sh"><code>git clone https://github.com/Theyashsawarkar/drishya ~/.local/share/drishya
+ln -s ~/.local/share/drishya/bin/drishya ~/.local/bin/drishya
+drishya            # opens the player (it starts itself the first time)</code></pre>
+<p>For app launchers and to open video files with it:</p>
+<pre class="code" data-lang="sh"><code>ln -s ~/.local/share/drishya/data/dev.vayu.Drishya.desktop ~/.local/share/applications/
+xdg-mime default dev.vayu.Drishya.desktop video/mp4 video/x-matroska video/webm</code></pre>
+<p>Update with <code>git -C ~/.local/share/drishya pull &amp;&amp; drishya quit</code>.</p>
+<p>To start it with your session (so it opens at once), a user service:</p>
+<pre class="code" data-lang="ini"><code># ~/.config/systemd/user/drishya.service
+[Unit]
+PartOf=graphical-session.target
+After=graphical-session.target
+[Service]
+ExecStart=%h/.local/bin/drishya daemon
+Restart=on-failure
+[Install]
+WantedBy=graphical-session.target</code></pre>
+<p>On a tiling compositor, float the mini player in a corner. sway:</p>
+<pre class="code" data-lang=""><code>for_window [app_id=&quot;^dev\.vayu\.Drishya$&quot; title=&quot;^drishya mini$&quot;] floating enable, sticky enable, resize set 480 270, move position 1420 790</code></pre>
+<h2 id="usage"><a class="anchor" href="#usage">#</a>Usage</h2>
+<pre class="code" data-lang=""><code>drishya                     open the player, or close it if it&#x27;s open
+drishya play &lt;what&gt;         play now: a YouTube link, any stream or video link, a file or folder,
+                            or search words (plays the top YouTube result)
+drishya add [--next] &lt;what&gt; add to Up next instead
+drishya show | hide | mini  the window, hidden, the mini player
+drishya tab &lt;name&gt;          watch queue library youtube history downloads
+drishya ctl &lt;command&gt;       toggle play pause next prev | seek +10 | seek 1:30 | vol 80 | speed 1.5
+drishya status [--json]     what&#x27;s playing
+drishya quit                stop it</code></pre>
+<p>Tabs: <code>0</code> Watch, <code>1</code> Up next, <code>2</code> Library, <code>3</code> YouTube, <code>4</code> History, <code>5</code> Downloads. Lists move with <code>j</code>/<code>k</code>; <code>Enter</code> plays. <code>?</code> shows every key.</p>
+<h2 id="keys"><a class="anchor" href="#keys">#</a>Keys</h2>
+<p>Vim-style, one or two keys each; counts work (<code>5j</code>, <code>3.</code> skips 30 s).</p>
+<p><strong>Everywhere</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>Ctrl+Tab / Ctrl+Shift+Tab</code></td><td>Switch to the next / previous tab (wraps around)</td></tr><tr><td><code>Ctrl+0..5</code></td><td>Switch to that numbered tab at once (the number shown on it)</td></tr><tr><td><code>0</code></td><td>Switch to Watch (the video)</td></tr><tr><td><code>1</code></td><td>Switch to Up next (the queue)</td></tr><tr><td><code>2</code></td><td>Switch to your video library</td></tr><tr><td><code>3</code></td><td>Switch to YouTube search</td></tr><tr><td><code>4</code></td><td>Switch to your history (continue watching)</td></tr><tr><td><code>5</code></td><td>Switch to downloads</td></tr><tr><td><code>j / k</code></td><td>Move down / up a video (counts work: 5j)</td></tr><tr><td><code>gg / G</code></td><td>Jump to the top / bottom (12G: to the 12th)</td></tr><tr><td><code>Ctrl+d / Ctrl+u</code></td><td>Scroll half a page down / up</td></tr><tr><td><code>Space</code></td><td>Toggle play / pause</td></tr><tr><td><code>Enter</code></td><td>Play the selected video</td></tr><tr><td><code>. / ,</code></td><td>Seek forward / back 10 seconds (3. = 30 s)</td></tr><tr><td><code>&gt; / &lt;</code></td><td>Play the next / previous video</td></tr><tr><td><code>= / -</code></td><td>Raise / lower volume</td></tr><tr><td><code>m</code></td><td>Toggle mute</td></tr><tr><td><code>f</code></td><td>Toggle fullscreen (Esc leaves it too)</td></tr><tr><td><code>t</code></td><td>Toggle theater mode (the video without the side panel)</td></tr><tr><td><code>z</code></td><td>Switch to the mini player (picture-in-picture)</td></tr><tr><td><code>c</code></td><td>Cycle subtitles (off, then each language)</td></tr><tr><td><code>#</code></td><td>Cycle the audio track</td></tr><tr><td><code>[ / ]</code></td><td>Slow down / speed up playback (0.25× steps)</td></tr><tr><td><code>Backspace</code></td><td>Reset playback speed to normal</td></tr><tr><td><code>{ / }</code></td><td>Jump to the previous / next chapter</td></tr><tr><td><code>S</code></td><td>Start the video over from the beginning</td></tr><tr><td><code>M</code></td><td>Toggle autoplay (related videos or the next episode after yours)</td></tr><tr><td><code>D</code></td><td>Save the video to your disk with subtitles (download)</td></tr><tr><td><code>V</code></td><td>Select several videos (visual mode)</td></tr><tr><td><code>u</code></td><td>Restore the last queue change (undo)</td></tr><tr><td><code>Ctrl+r</code></td><td>Restore an undone queue change (redo)</td></tr><tr><td><code>/</code></td><td>Search (YouTube on 3, your files on 2, the list elsewhere)</td></tr><tr><td><code>n / N</code></td><td>Jump to the next / previous search match</td></tr><tr><td><code>o</code></td><td>Open a link or file (any server: HLS, a video file, a site yt-dlp knows)</td></tr><tr><td><code>Q</code></td><td>Pick the video quality (kept for the next videos and downloads)</td></tr><tr><td><code>:</code></td><td>Run a command (:yt query, :open path, :speed 1.5…)</td></tr><tr><td><code>i</code></td><td>Show the video's details and link</td></tr><tr><td><code>?</code></td><td>Show all keys</td></tr><tr><td><code>q / Esc</code></td><td>Close the window (pauses; z keeps a mini player)</td></tr></tbody></table></div>
+<p><strong>On Watch (the video)</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>h / l</code></td><td>Seek back / forward 5 seconds (3l = 15 s)</td></tr><tr><td><code>j / k</code></td><td>Move through the up next list on the side</td></tr></tbody></table></div>
+<p><strong>On Up next (the queue)</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>dd</code></td><td>Remove the video from the queue (V: the selection)</td></tr><tr><td><code>yy</code></td><td>Copy the video (yank)</td></tr><tr><td><code>p / P</code></td><td>Paste removed or copied videos below / above</td></tr><tr><td><code>J / K</code></td><td>Move the video down / up</td></tr><tr><td><code>A</code></td><td>Move the video to play next</td></tr><tr><td><code>zz</code></td><td>Jump to the video that's playing</td></tr></tbody></table></div>
+<p><strong>In the library</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>h / l</code></td><td>Move between the folder columns (l opens a folder)</td></tr><tr><td><code>a / A</code></td><td>Add to the end of the queue / to play next</td></tr><tr><td><code>R</code></td><td>Reload the folders (after a search too)</td></tr></tbody></table></div>
+<p><strong>In YouTube results</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>a / A</code></td><td>Add the result to the end of the queue / to play next</td></tr></tbody></table></div>
+<p><strong>In the history</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>dd</code></td><td>Forget the video (removes it from the history)</td></tr></tbody></table></div>
+<p><strong>In downloads</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>R</code></td><td>Retry a failed download</td></tr><tr><td><code>x</code></td><td>Cancel a download in progress</td></tr><tr><td><code>dd</code></td><td>Delete the saved file (asks first)</td></tr></tbody></table></div>
+<p><strong>In the quality list</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>j / k</code></td><td>Move through the qualities</td></tr><tr><td><code>Enter</code></td><td>Play at the selected quality (and keep it)</td></tr><tr><td><code>Esc</code></td><td>Close the quality list</td></tr></tbody></table></div>
+<p><strong>In the sign-in panel</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>Enter</code></td><td>Sign in and play (from the password field)</td></tr><tr><td><code>Tab</code></td><td>Move between the username and password fields</td></tr><tr><td><code>Ctrl+b</code></td><td>Sign in with your browser's login instead (sites yt-dlp plays)</td></tr><tr><td><code>Ctrl+s</code></td><td>Toggle remembering the login in your keyring</td></tr><tr><td><code>Esc</code></td><td>Cancel signing in</td></tr></tbody></table></div>
+<p><strong>In the mini player</strong></p>
+<div class="table"><table><thead><tr><th>Key</th><th>Action</th></tr></thead><tbody><tr><td><code>Space</code></td><td>Toggle play / pause</td></tr><tr><td><code>. / ,</code></td><td>Seek forward / back 10 seconds</td></tr><tr><td><code>&gt; / &lt;</code></td><td>Play the next / previous video</td></tr><tr><td><code>z / Enter</code></td><td>Switch back to the full player</td></tr><tr><td><code>q / Esc</code></td><td>Close the mini player (pauses)</td></tr></tbody></table></div>
+<h2 id="commands"><a class="anchor" href="#commands">#</a>Commands</h2>
+<p><code>:</code> opens the command line:</p>
+<div class="table"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>:open &lt;link, file or folder&gt;</code></td><td>Play it now (<code>o</code> opens this)</td></tr><tr><td><code>:add &lt;…&gt;</code></td><td>Add to Up next</td></tr><tr><td><code>:yt &lt;search&gt;</code></td><td>Search YouTube</td></tr><tr><td><code>:seek 1:30</code> · <code>:seek +30</code></td><td>Jump to a time, or by an amount</td></tr><tr><td><code>:speed 1.5</code></td><td>Playback speed</td></tr><tr><td><code>:vol 80</code> · <code>:vol +10</code></td><td>Volume</td></tr><tr><td><code>:sub en</code> · <code>:sub off</code></td><td>Pick subtitles by language</td></tr><tr><td><code>:quality 720</code></td><td>Play at up to 720p, from now on (<code>Q</code> picks from a list)</td></tr><tr><td><code>:sleep 30m</code> · <code>:sleep off</code></td><td>Pause after a while</td></tr><tr><td><code>:shot</code></td><td>Save a screenshot to ~/Pictures</td></tr><tr><td><code>:logout [server]</code></td><td>Forget the login for a server (and remove it from your keyring)</td></tr><tr><td><code>:autoplay on</code> · <code>off</code></td><td>Same as <code>M</code></td></tr><tr><td><code>:dl</code></td><td>Download what's playing</td></tr><tr><td><code>:clear</code></td><td>Empty Up next (<code>u</code> brings it back)</td></tr><tr><td><code>:q</code> · <code>:qa</code></td><td>Hide the window · quit</td></tr></tbody></table></div>
+<h2 id="links-streams-and-signing-in"><a class="anchor" href="#links-streams-and-signing-in">#</a>Links, streams and signing in</h2>
+<p>Press <code>o</code>, paste a link and Enter (or paste it into the YouTube search box, or run <code>drishya play &lt;link&gt;</code>). drishya plays:</p>
+<ul><li><strong>HLS and DASH</strong> (<code>.m3u8</code>, <code>.mpd</code>) from any server, live or not. A stream that offers several qualities plays the best one up to your <code>quality</code>.</li><li><strong>A video file on a server</strong> (<code>https://…/film.mkv</code>), streamed as it plays.</li><li><strong>Any site yt-dlp supports</strong> (Vimeo, Twitch, Dailymotion, news sites…).</li><li><code>rtmp://</code>, <code>rtsp://</code>, <code>srt://</code> streams.</li></ul>
+<p>When the server answers that it needs a login (HTTP 401 or 403), a sign-in panel opens: your username and password, sent as HTTP authentication with every request, including each segment of a stream. Tick <em>Remember in my keyring</em> (<code>Ctrl+s</code>) to keep it in your keyring (through libsecret), else it's kept only until drishya quits. A site that needs an account offers your browser's login instead (<code>Ctrl+b</code>: yt-dlp reads its cookies). A link with the login in it (<code>https://user:password@host/…</code>) works too: the login is taken out of the link, so it never reaches the history or the queue file.</p>
+<p align="center">
+  <img alt="The sign-in panel over the player: Sign in to the server, why, username and password fields, Remember in my keyring, and the keys" src="assets/screenshots/signin.png" width="70%">
+</p>
+<h2 id="configuration"><a class="anchor" href="#configuration">#</a>Configuration</h2>
+<p><code>~/.config/drishya/config.toml</code>, everything optional:</p>
+<pre class="code" data-lang="toml"><code>[drishya]
+quality = 1080           # highest resolution to stream or download
+autoplay = true          # more after your videos: related ones, or the next episode
+resume = true            # start where you stopped
+seek_step = 10           # seconds for , and .
+fine_step = 5            # seconds for h and l on the Watch tab
+volume_step = 5
+subtitles = &quot;en&quot;         # your subtitle languages, e.g. &quot;en,hi&quot;
+video_dirs = [&quot;~/Videos&quot;]
+download_dir = &quot;~/Videos/YouTube&quot;
+hwdec = &quot;auto-copy-safe&quot; # mpv&#x27;s hardware decoding; &quot;no&quot; to turn it off
+pause_on_hide = true     # q pauses (z keeps a mini player going)
+# opacity = 0.62         # the window&#x27;s glass (unset: your theme&#x27;s)</code></pre>
+<p>Styles: <code>~/.config/drishya/style.css</code> is loaded after drishya's own. State: <code>~/.local/state/drishya</code> (history, queue, settings, downloads); thumbnails: <code>~/.cache/drishya</code>.</p>
+<h2 id="how-it-works"><a class="anchor" href="#how-it-works">#</a>How it works</h2>
+<ul><li>One resident process (<code>drishya daemon</code>, the app id <code>dev.vayu.Drishya</code>) holds the player, MPRIS and downloads; <code>drishya</code> only sends it a D-Bus message, so the window opens at once.</li><li>The player is libmpv, bound with ctypes (<code>drishya/mpv.py</code>): no extra Python package. Its OpenGL renderer draws into a GTK <code>GLArea</code>; the mini player takes the renderer over and gives it back.</li><li>YouTube plays through mpv's own yt-dlp support, which picks the streams (no AV1, which few laptops decode in hardware) and renews them. Search, related videos and downloads call yt-dlp directly, never on the GTK main loop.</li><li>Logs go to stderr: <code>journalctl --user -u drishya</code> with the service. <code>DRISHYA_DEBUG=1</code> shows debug messages.</li></ul>
+<h2 id="troubleshooting"><a class="anchor" href="#troubleshooting">#</a>Troubleshooting</h2>
+<ul><li><strong>Black video, sound plays.</strong> Look at <code>journalctl --user -u drishya</code> for "OpenGL" or "video output". <code>hwdec = &quot;no&quot;</code> rules out hardware decoding.</li><li><strong>YouTube says "Sign in to confirm you're not a bot".</strong> The sign-in panel offers your browser's login (<code>Ctrl+b</code>).</li><li><strong>A stream won't play.</strong> Try it in mpv (<code>mpv &#x27;&lt;link&gt;&#x27;</code>); if mpv can't, drishya can't either. A 403 often means the link expired: get a fresh one.</li><li><strong>No thumbnails for your files.</strong> Install ffmpeg.</li></ul>
+<h2 id="contributing"><a class="anchor" href="#contributing">#</a>Contributing</h2>
+<p>Bug reports, ideas and pull requests are welcome: see <a href="https://github.com/Theyashsawarkar/drishya/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>, and <a href="changelog.html">CHANGELOG.md</a> for what changed in each release.</p>
+<p>drishya comes from <a href="https://github.com/Theyashsawarkar/vayu">Vayu</a>, a keyboard-driven Wayland desktop, and works on any Linux desktop on its own.</p>
+<h2 id="license"><a class="anchor" href="#license">#</a>License</h2>
+<p><a href="https://github.com/Theyashsawarkar/drishya/blob/main/LICENSE">MIT</a></p>
+</article></div>
+<footer><div class="in"><div><h4>Desktop</h4><a href="https://theyashsawarkar.github.io/vayu/" class="">vayu <span>वायु · the keyboard-driven Wayland desktop</span></a></div><div><h4>Apps</h4><a href="https://theyashsawarkar.github.io/kosha/" class="">kosha <span>कोश · package manager</span></a><a href="https://theyashsawarkar.github.io/nada/" class="">nada <span>नाद · music player</span></a><a href="https://theyashsawarkar.github.io/sangam/" class="">sangam <span>संगम · pull requests in the terminal</span></a><a href="https://theyashsawarkar.github.io/anumati/" class="">anumati <span>अनुमति · root commands for AI agents</span></a><a href="https://theyashsawarkar.github.io/vesha/" class="">vesha <span>वेष · Claude Code accounts</span></a><a href="https://theyashsawarkar.github.io/varna/" class="">varna <span>वर्ण · theme engine</span></a><a href="https://theyashsawarkar.github.io/vinyasa/" class="">vinyasa <span>विन्यास · settings</span></a></div><div><h4>Vyom</h4><a href="https://theyashsawarkar.github.io/vyom/" class="">vyom <span>व्योम · panels runtime</span></a></div><div><h4>Vyom tools</h4><a href="https://theyashsawarkar.github.io/dvara/" class="">dvara <span>द्वार · apps</span></a><a href="https://theyashsawarkar.github.io/ganit/" class="">ganit <span>गणित · calculator</span></a><a href="https://theyashsawarkar.github.io/smriti/" class="">smriti <span>स्मृति · clipboard</span></a><a href="https://theyashsawarkar.github.io/bhava/" class="">bhava <span>भाव · emoji</span></a><a href="https://theyashsawarkar.github.io/tarang/" class="">tarang <span>तरंग · Wi‑Fi</span></a><a href="https://theyashsawarkar.github.io/setu/" class="">setu <span>सेतु · Bluetooth</span></a><a href="https://theyashsawarkar.github.io/doot/" class="">doot <span>दूत · phone</span></a><a href="https://theyashsawarkar.github.io/patra/" class="">patra <span>पात्र · Docker</span></a><a href="https://theyashsawarkar.github.io/suchana/" class="">suchana <span>सूचना · notifications</span></a><a href="https://theyashsawarkar.github.io/raga/" class="">raga <span>राग · YouTube</span></a><a href="https://theyashsawarkar.github.io/mudra/" class="">mudra <span>मुद्रा · keybindings</span></a><a href="https://theyashsawarkar.github.io/urja/" class="">urja <span>ऊर्जा · battery</span></a><a href="https://theyashsawarkar.github.io/vishram/" class="">vishram <span>विश्राम · power menu</span></a><a href="https://theyashsawarkar.github.io/kendra/" class="">kendra <span>केन्द्र · quick settings</span></a></div></div>
+<div class="bottom">drishya is free software under the MIT license · <a href="https://github.com/Theyashsawarkar/drishya">source</a> · <a href="https://github.com/Theyashsawarkar/drishya/issues">issues</a> · <a href="changelog.html">changelog</a> · part of <a href="https://theyashsawarkar.github.io/vayu/">Vayu</a></div></footer>
+<script>
+document.querySelectorAll('pre.code').forEach(p=>{const b=document.createElement('button');b.className='copy';b.textContent='Copy';
+b.onclick=()=>{navigator.clipboard.writeText(p.innerText.replace(/^Copy/,'')).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)})};p.appendChild(b)});
+const links=[...document.querySelectorAll('.toc a')];if(links.length){const hs=links.map(a=>document.getElementById(a.hash.slice(1))).filter(Boolean);
+const on=()=>{let cur=hs[0];for(const h of hs){if(h.getBoundingClientRect().top<120)cur=h}links.forEach(a=>a.classList.toggle('on',cur&&a.hash==='#'+cur.id))};
+addEventListener('scroll',on,{passive:true});on()}
+</script>
+</body>
+</html>

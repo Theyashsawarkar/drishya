@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=drishya
+GenericName=Video player
+Comment=Watch YouTube, your videos and any stream, with vim keys
+Exec=drishya %U
+Icon=video-x-generic
+Terminal=false
+Categories=AudioVideo;Video;Player;GTK;
+Keywords=video;youtube;player;movie;stream;hls;m3u8;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;video/ogg;video/3gpp;video/x-flv;video/x-ms-wmv;video/mp2t;application/vnd.apple.mpegurl;application/x-mpegurl;audio/x-mpegurl;application/dash+xml;
+StartupWMClass=dev.vayu.Drishya

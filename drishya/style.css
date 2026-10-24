@@ -1,0 +1,185 @@
+/* drishya: Catppuccin Mocha, glass over the compositor's blur (like Vyom and nāda).
+   The window's background opacity comes from [drishya] opacity, appended at load. */
+@define-color text #cdd6f4;
+@define-color sub1 #bac2de;
+@define-color sub0 #a6adc8;
+@define-color ov1 #7f849c;
+@define-color ov0 #6c7086;
+@define-color s1 #45475a;
+@define-color s0 #313244;
+@define-color base #1e1e2e;
+@define-color crust #11111b;
+@define-color mauve #cba6f7;
+@define-color pink #f5c2e7;
+@define-color red #f38ba8;
+@define-color peach #fab387;
+@define-color yellow #f9e2af;
+@define-color green #a6e3a1;
+@define-color teal #94e2d5;
+@define-color sky #89dceb;
+@define-color blue #89b4fa;
+@define-color lavender #b4befe;
+
+window.drishya, window.drishya-mini { background: transparent; }
+.drishya-root {
+  border-radius: 20px;
+  border: 1px solid alpha(@mauve, 0.30);
+  background-image: linear-gradient(to bottom, alpha(white, 0.06), alpha(white, 0) 35%);
+  color: @text;
+  font-family: "Inter", "Noto Sans", sans-serif;
+  font-size: 13px;
+}
+.glyph, .mono { font-family: "JetBrainsMono Nerd Font", monospace; }
+.mono { font-size: 11px; }
+.dim { color: @ov1; }
+.dimmer { color: @ov0; }
+
+/* ---- top bar ---- */
+.topbar { padding: 11px 14px; border-bottom: 1px solid alpha(white, 0.06); }
+.logo { padding: 5px 12px 5px 9px; border-radius: 10px; background: alpha(@mauve, 0.16); color: @mauve; font-weight: 700; }
+.logo .glyph { font-size: 14px; }
+button.tab { padding: 4px 10px; border-radius: 9px; background: none; box-shadow: none; border: none; color: @sub0; min-height: 0; }
+button.tab:hover { background: alpha(white, 0.05); }
+button.tab.on { background: alpha(white, 0.09); color: @text; }
+.keycap { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; font-weight: 600; color: @sub1;
+  background: alpha(white, 0.07); border: 1px solid alpha(white, 0.12); border-radius: 5px; padding: 0 5px; }
+.mode { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 7px;
+  background: @mauve; color: @crust; }
+.mode.visual { background: @peach; } .mode.search { background: @sky; } .mode.command { background: @yellow; } .mode.confirm { background: @red; }
+
+/* ---- lists ---- */
+.list { padding: 4px 8px 10px 10px; }
+.sect { font-size: 10.5px; font-weight: 600; letter-spacing: 1px; color: @ov0; padding: 12px 10px 5px; }
+.sect-chip { font-size: 11px; padding: 2px 9px; border-radius: 8px; background: alpha(@mauve, 0.16); color: @mauve; letter-spacing: 0; }
+.sect-chip.off { background: alpha(white, 0.05); color: @ov0; }
+.row { padding: 5px 8px; border-radius: 11px; border: 1px solid transparent; }
+.row:hover { background: alpha(white, 0.03); }
+.row.sel { background: alpha(@mauve, 0.13); border-color: alpha(@mauve, 0.35); }
+.row.vis { background: alpha(@peach, 0.13); border-color: alpha(@peach, 0.35); }
+.row.past { opacity: 0.5; }
+.row.drop { box-shadow: inset 0 2px 0 @mauve; }
+.row .title { font-weight: 600; font-size: 13.5px; }
+.row.playing .title, .row.playing .no { color: @mauve; }
+.row .sub { font-size: 12px; color: @ov1; }
+.row .no { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: @ov0; min-width: 22px; }
+.row .dur { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11.5px; color: @ov1; min-width: 44px; }
+.row .grip { color: @ov0; font-family: "JetBrainsMono Nerd Font", monospace; opacity: 0; }
+.row:hover .grip, .row.sel .grip { opacity: 1; }
+button.x { background: none; box-shadow: none; border: none; color: @ov1; padding: 0 5px; min-height: 0; min-width: 0; border-radius: 6px; opacity: 0; }
+.row:hover button.x, .row.sel button.x { opacity: 1; }
+button.x:hover { background: alpha(@red, 0.18); color: @red; }
+.tile { border-radius: 8px; color: alpha(@crust, 0.8); font-weight: 700; font-size: 12px; }
+.badge { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 6px; }
+.badge.local { background: alpha(@green, 0.14); color: @green; }
+.badge.yt { background: alpha(@red, 0.14); color: @red; }
+.badge.dl { background: alpha(@sky, 0.14); color: @sky; }
+.badge.failed { background: alpha(@red, 0.2); color: @red; }
+.empty { color: @ov1; font-size: 13px; padding: 40px; }
+.empty .big { font-size: 34px; color: @ov0; }
+
+/* ---- right pane ---- */
+.now { border-left: 1px solid alpha(white, 0.06); background: alpha(@crust, 0.22); padding: 16px 20px 14px; }
+.now-title { font-size: 19px; font-weight: 700; }
+.now-artist { color: @sub0; font-size: 13px; }
+.kv-k { color: @ov1; font-size: 12px; }
+.kv-v { color: @sub1; font-size: 12px; }
+.chip { font-size: 11.5px; padding: 3px 9px; border-radius: 8px; background: alpha(white, 0.06); color: @sub1; }
+.chip.act { background: alpha(@mauve, 0.16); color: @mauve; }
+.upnext-row { padding: 4px 6px; border-radius: 9px; }
+.upnext-row .t { font-weight: 600; font-size: 12.5px; }
+.upnext-row .a { color: @ov1; font-size: 11.5px; }
+
+/* ---- bottom bar ---- */
+.bar { padding: 10px 18px; border-top: 1px solid alpha(white, 0.06); }
+button.ctl { background: none; box-shadow: none; border: none; color: @sub1; min-width: 34px; min-height: 34px; border-radius: 10px; padding: 0; }
+button.ctl:hover { background: alpha(white, 0.06); }
+button.ctl label { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 17px; }
+button.ctl.big { background: @mauve; color: @crust; min-width: 42px; min-height: 42px; border-radius: 21px; }
+button.ctl.big label { font-size: 19px; }
+button.ctl.on { color: @mauve; }
+/* The timeline: a thin line like YouTube's; the knob shows on hover. */
+scale.progress { padding: 8px 0; }
+scale.progress trough { min-height: 3px; border-radius: 99px; background: alpha(white, 0.12); }
+scale.progress highlight { min-height: 3px; border-radius: 99px; background-image: linear-gradient(to right, @mauve, @pink); }
+scale.progress slider { min-width: 0; min-height: 0; margin: 0; border: none; background: transparent; box-shadow: none; }
+scale.progress:hover trough, scale.progress:hover highlight { min-height: 5px; }
+scale.progress:hover slider { min-width: 12px; min-height: 12px; margin: -5px; border-radius: 99px; background: @text; }
+scale.volume trough { min-height: 4px; border-radius: 99px; background: alpha(white, 0.1); }
+scale.volume highlight { border-radius: 99px; background: @sub1; }
+scale.volume slider { min-width: 10px; min-height: 10px; margin: -4px; border-radius: 99px; background: @sub1; border: none; box-shadow: none; }
+.time { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: @ov1; }
+
+/* ---- status line ---- */
+.status { padding: 6px 16px; background: alpha(@crust, 0.3); border-top: 1px solid alpha(white, 0.05);
+  border-radius: 0 0 20px 20px; font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: @ov1; }
+text.cmdline, .cmdline { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 12px; color: @text; caret-color: @mauve; background: none; }
+.toast { background: alpha(@crust, 0.94); border: 1px solid @s1; border-radius: 12px; padding: 9px 14px; font-size: 13px; margin-bottom: 92px; }
+.help { background: alpha(@crust, 0.96); border: 1px solid @s1; border-radius: 16px; padding: 18px 24px; margin: 60px 24px 84px; }
+.help .h { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: @mauve; margin-bottom: 6px; }
+.help .d { color: @sub0; font-size: 12.5px; }
+
+/* ---- search box (YouTube / library) ---- */
+.searchbox { margin: 10px 12px 4px; padding: 7px 12px; border-radius: 11px; background: alpha(white, 0.05); border: 1px solid alpha(white, 0.06); }
+.searchbox text, .searchbox { font-size: 13.5px; }
+.col { border-right: 1px solid alpha(white, 0.06); }
+.col.focus .sect { color: @mauve; }
+
+.noscrollbar scrollbar { opacity: 0; min-width: 0; }
+
+/* ---- videos ---- */
+.thumb { border-radius: 10px; background: alpha(white, 0.05); }
+.thumb-glyph { font-size: 26px; color: alpha(white, 0.2); }
+progressbar.watched trough { min-height: 3px; background: alpha(white, 0.25); border-radius: 0; }
+progressbar.watched progress { min-height: 3px; background: @red; border-radius: 0; }
+.row .title { font-size: 13.5px; }
+.empty .glyph.big { font-size: 40px; color: @ov0; }
+.folder-row { padding: 8px 10px; }
+.folder-glyph { color: @yellow; font-size: 16px; }
+.badge { min-width: 0; }
+
+/* ---- watch: the stage and the side ---- */
+.stage { background: black; }
+.drishya-root:not(.full) .stage { border-radius: 0 0 0 0; }
+.center-glyph { font-size: 64px; color: alpha(white, 0.85); background: alpha(black, 0.45); border-radius: 99px;
+  padding: 18px 26px; }
+.osd { padding: 14px 22px 18px; background-image: linear-gradient(to top, alpha(black, 0.75), alpha(black, 0)); }
+.osd-title { font-size: 15px; font-weight: 600; color: white; }
+progressbar.osd-bar trough { min-height: 4px; border-radius: 99px; background: alpha(white, 0.25); }
+progressbar.osd-bar progress { min-height: 4px; border-radius: 99px; background-image: linear-gradient(to right, @mauve, @pink); }
+.osd .time { color: alpha(white, 0.8); }
+.side { border-left: 1px solid alpha(white, 0.06); background: alpha(@crust, 0.22); }
+.now { padding: 16px 18px 6px; border-left: none; background: none; }
+.now-title { font-size: 16.5px; font-weight: 700; }
+.now-sub { color: @sub0; font-size: 12.5px; }
+.now-stats { color: @ov1; font-size: 12px; }
+.chips { margin-top: 6px; }
+.chip.live { background: alpha(@red, 0.18); color: @red; font-weight: 700; }
+.upnext { }
+.upnext-row { padding: 5px 6px; border-radius: 10px; }
+.upnext-row.auto .t { color: @sub1; }
+.drishya-root.full { border-radius: 0; border: none; background: black; }
+
+/* ---- mini player ---- */
+window.drishya-mini { background: transparent; }
+.mini-root { border-radius: 14px; background: black; border: 1px solid alpha(@mauve, 0.35); }
+.mini-osd { padding: 8px 12px 10px; border-radius: 0 0 14px 14px; }
+.mini-title { font-size: 12.5px; }
+
+
+/* ---- sign in ---- */
+.signin { background: alpha(@crust, 0.97); border: 1px solid @s1; border-radius: 16px; padding: 20px 24px; min-width: 460px; }
+.signin-title { font-size: 15px; font-weight: 700; color: @text; }
+.signin-why { color: @sub0; font-size: 12.5px; }
+.signin-glyph { font-size: 18px; color: @yellow; }
+.signin entry { padding: 6px 10px; border-radius: 10px; background: alpha(white, 0.06); border: 1px solid alpha(white, 0.08); }
+.mode.signin { background: @yellow; }
+
+/* ---- quality ---- */
+.qpanel { min-width: 380px; }
+.q-row { padding: 7px 12px; border-radius: 10px; border: 1px solid transparent; }
+.q-row.sel { background: alpha(@mauve, 0.15); border-color: alpha(@mauve, 0.4); }
+.q-row.on { color: @sub1; }
+.q-name { font-weight: 600; font-size: 13.5px; }
+button.ctl.qbtn label { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11.5px; font-weight: 700; }
+button.ctl.qbtn { padding: 0 6px; }
+.mode.quality { background: @sky; }

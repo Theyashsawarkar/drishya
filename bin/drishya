@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""drishya: a keyboard-driven video player with YouTube, your library,
+streams (HLS and any link), resume, history and downloads.
+
+  drishya                     open the player, or close it if it's open (toggle)
+  drishya show | hide | mini  the full player, hidden, the mini player (picture-in-picture)
+  drishya tab <name>          open on a tab: watch queue library youtube history downloads
+  drishya play <what>         play now: a YouTube URL, an HLS/.m3u8 or other stream link,
+                              a file or folder, or search words (plays the top YouTube result)
+  drishya add [--next] <what> add to the queue instead
+  drishya ctl <command>       control playback: toggle play pause next prev
+                              | seek +10 | seek -10 | seek 1:30 | vol +5 | vol 80 | speed 1.5
+  drishya status [--json]     what's playing
+  drishya daemon              start the resident player (the drishya service runs this)
+  drishya quit                stop it
+  drishya --version | --help
+
+The player is one resident process; this script only sends it a D-Bus
+message, so it opens at once.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, ROOT)
+from drishya import APP_ID, OBJ, VERSION  # noqa: E402
+
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "drishya")
+
+
+def running():
+    r = subprocess.run(["busctl", "--user", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                        "org.freedesktop.DBus", "NameHasOwner", "s", APP_ID], capture_output=True, text=True)
+    return r.stdout.strip() == "b true"
+
+
+def gvariant_str(s):
+    return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def action(name, param=None):
+    params = "[]" if param is None else f"[<{gvariant_str(param)}>]"
+    return subprocess.run(["gdbus", "call", "--session", "--dest", APP_ID, "--object-path", OBJ,
+                           "--method", "org.gtk.Actions.Activate", name, params, "{}"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+
+
+def start_daemon():
+    """Starts `drishya daemon` so that what it logs lands somewhere you can read:
+    your drishya.service if you have one, else a transient unit (systemd-run),
+    both in the journal; else, without systemd, a log file kept under 1 MB.
+    Returns where to look."""
+    systemctl, systemd_run = shutil.which("systemctl"), shutil.which("systemd-run")
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if systemctl and subprocess.run([systemctl, "--user", "cat", "drishya.service"], **quiet).returncode == 0 \
+            and subprocess.run([systemctl, "--user", "start", "--no-block", "drishya.service"], **quiet).returncode == 0:
+        return "journalctl --user -u drishya"
+    if systemd_run and subprocess.run([systemd_run, "--user", "--collect", "--quiet", "--unit=drishya-daemon", "--",
+                                       sys.executable, os.path.realpath(__file__), "daemon"], **quiet).returncode == 0:
+        return "journalctl --user -u drishya-daemon"
+    os.makedirs(STATE, exist_ok=True)
+    path = os.path.join(STATE, "daemon.log")
+    try:
+        if os.path.getsize(path) > 1 << 20:
+            os.replace(path, path + ".1")
+    except OSError:
+        pass
+    with open(path, "a") as log:
+        subprocess.Popen([sys.executable, os.path.realpath(__file__), "daemon"], stdin=subprocess.DEVNULL,
+                         stdout=log, stderr=log, start_new_session=True)
+    return path
+
+
+def ensure_daemon():
+    """Starts `drishya daemon` in the background if it isn't running and waits
+    (up to 10 s) for it to be ready."""
+    if running():
+        return True
+    where = start_daemon()
+    for _ in range(100):
+        time.sleep(0.1)
+        if running():
+            return True
+    print(f"drishya: the player didn't start (see: {where})", file=sys.stderr)
+    return False
+
+
+def status(args):
+    """What's playing, from drishya's MPRIS interface."""
+    if not running():
+        print(json.dumps({"state": "stopped"}) if "--json" in args else "not running")
+        return 0
+    from gi.repository import Gio, GLib
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        props = bus.call_sync("org.mpris.MediaPlayer2.drishya", "/org/mpris/MediaPlayer2",
+                              "org.freedesktop.DBus.Properties", "GetAll",
+                              GLib.Variant("(s)", ("org.mpris.MediaPlayer2.Player",)), GLib.VariantType("(a{sv})"),
+                              Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+    except GLib.Error as e:
+        print(f"drishya: {e.message}", file=sys.stderr)
+        return 1
+    md = props.get("Metadata", {})
+    info = {"state": props.get("PlaybackStatus", "Stopped").lower(), "title": md.get("xesam:title", ""),
+            "channel": (md.get("xesam:artist") or [""])[0], "url": md.get("xesam:url", ""),
+            "position": props.get("Position", 0) / 1e6, "duration": md.get("mpris:length", 0) / 1e6,
+            "volume": round(props.get("Volume", 0) * 100), "speed": props.get("Rate", 1.0)}
+    if "--json" in args:
+        print(json.dumps(info))
+    elif info["title"]:
+        fmt = lambda s: f"{int(s) // 60}:{int(s) % 60:02d}"
+        print(f"{info['state']}: {info['title']} · {info['channel']}  {fmt(info['position'])} / {fmt(info['duration'])}")
+    else:
+        print("stopped")
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else "toggle"
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if cmd in ("-V", "--version"):
+        print(f"drishya {VERSION}")
+        return 0
+    if cmd == "status":
+        return status(args[1:])
+    if cmd == "quit":
+        return action("quit") if running() else 0
+    if cmd in ("toggle", "show", "hide", "mini"):
+        if cmd == "hide" and not running():
+            return 0
+        return 0 if ensure_daemon() and action(cmd) == 0 else 1
+    if cmd == "tab":
+        return 0 if ensure_daemon() and action("tab", args[1] if len(args) > 1 else "watch") == 0 else 1
+    if cmd == "ctl":
+        if len(args) < 2:
+            print("drishya ctl toggle|play|pause|next|prev|seek ±N|seek M:SS|vol ±N|vol N|speed N", file=sys.stderr)
+            return 2
+        if not running():
+            print("drishya isn't running", file=sys.stderr)
+            return 1
+        return 0 if action("ctl", " ".join(args[1:])) == 0 else 1
+    if cmd in ("play", "add", "open"):
+        where = "play" if cmd in ("play", "open") else "end"
+        rest = []
+        for a in args[1:]:
+            if a == "--next":
+                where = "next"
+            elif a == "--play":
+                where = "play"
+            else:
+                rest.append(a)
+        if not rest:
+            print(f"drishya {cmd} [--next] <YouTube URL | stream link | file | folder | search words>", file=sys.stderr)
+            return 2
+        target = " ".join(rest)
+        if os.path.exists(target):
+            target = os.path.abspath(target)
+        return 0 if ensure_daemon() and action("add", json.dumps({"url": target, "where": where})) == 0 else 1
+    if cmd != "daemon":
+        # `drishya <file or URL>`, as a desktop file or file manager calls it
+        if os.path.exists(cmd) or "://" in cmd:
+            target = os.path.abspath(cmd) if os.path.exists(cmd) else cmd
+            return 0 if ensure_daemon() and action("add", json.dumps({"url": target, "where": "play"})) == 0 else 1
+        print(f"drishya: unknown command {cmd} (drishya --help)", file=sys.stderr)
+        return 2
+    if running():
+        return 0
+    from drishya.app import main as app_main
+    return app_main()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

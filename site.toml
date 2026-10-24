@@ -1,0 +1,8 @@
+# The project website (docs/, GitHub Pages): built by scripts/build-site.py
+name = "drishya"
+sanskrit = "दृश्य"
+meaning = "sight"
+tagline = "A keyboard-driven video player for YouTube, your files and any stream, with resume, history and downloads."
+color = "sky"
+kind = "video player"
+logo = "assets/logo.svg"

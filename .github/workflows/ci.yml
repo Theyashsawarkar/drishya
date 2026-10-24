@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile drishya/*.py bin/drishya
+      - name: Version and changelog agree
+        run: |
+          v=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' drishya/__init__.py)
+          grep -q "^## v$v " CHANGELOG.md || { echo "CHANGELOG.md has no entry for v$v"; exit 1; }
+      - name: Every key is documented
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          readme = pathlib.Path("README.md").read_text()
+          missing = []
+          for path in pathlib.Path("drishya").glob("*.py"):
+              for line in path.read_text().splitlines():
+                  m = re.match(r"#\s*keybind:\s*Drishya/[^|]+\|\s*([^|]+?)\s*\|", line)
+                  if m and f"`{m.group(1)}`" not in readme:
+                      missing.append(m.group(1))
+          assert not missing, f"keys missing from README.md: {missing}"
+          PY
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Website is up to date
+        run: python3 scripts/build-site.py --check
