@@ -130,6 +130,17 @@ class YouTube(unittest.TestCase):
         for bad in ("en-de", "en-en", "en-zh-Hans", "fr", "hi-en"):
             self.assertFalse(wanted(bad), bad)
 
+    def test_storyboard_frames(self):
+        sb = {"w": 160, "h": 90, "rows": 5, "cols": 5, "fps": 0.2,
+              "frags": [{"url": f"u{i}", "duration": 125} for i in range(3)]}
+        self.assertEqual(youtube.storyboard_cell(sb, 0), (0, 0, 0))
+        self.assertEqual(youtube.storyboard_cell(sb, 6), (0, 160, 0))        # the 2nd frame: one tile right
+        self.assertEqual(youtube.storyboard_cell(sb, 30), (0, 160, 90))      # the 7th: next row
+        self.assertEqual(youtube.storyboard_cell(sb, 125), (1, 0, 0))        # the 26th frame: the next image
+        self.assertEqual(youtube.storyboard_cell(sb, 130), (1, 160, 0))
+        self.assertEqual(youtube.storyboard_cell(sb, 10 ** 6), (2, 640, 360))  # past the end: the last frame
+        self.assertIsNone(youtube.storyboard_cell(None, 5))
+
     def test_counts(self):
         self.assertEqual(youtube.views(1_234_567), "1.2M views")
         self.assertEqual(youtube.views(1), "1 view")

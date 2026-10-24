@@ -13,7 +13,9 @@ apply); it must work on any Linux desktop without Vayu.
   API). `drishya/core.py`: the model (queue, playback, resume, autoplay,
   undo, logins, downloads). `drishya/window.py`: the window and the vim key
   engine; `drishya/views.py`: the six tabs; `drishya/mini.py`: the mini
-  player; `drishya/auth.py`: sign-in and the keyring; `drishya/youtube.py`,
+  player; `drishya/search.py`: the search panel (/), the same module as
+  nāda's (keep the two in step); `drishya/finder.py`: what it finds here;
+  `drishya/auth.py`: sign-in and the keyring; `drishya/youtube.py`,
   `drishya/library.py`: blocking helpers, only from worker threads
   (`core.bg`). `drishya/util.py`, `store.py`, `config.py`: pure, tested.
 - One renderer at a time: a `VideoArea` attaches (takes mpv's render

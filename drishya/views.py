@@ -1,14 +1,15 @@
-"""The six tabs: Watch (the video), Up next (the queue), Library, YouTube,
-History, Downloads. Keys common to every list (j k gg G Ctrl+d/u V) are
-handled by the window; each view handles its own."""
+"""The tabs: Watch (the video), Up next (the queue), Library (a grid),
+History, Downloads, and the YouTube results page (from the search panel).
+Keys common to every list (j k gg G Ctrl+d/u V) are handled by the window;
+each view handles its own."""
 import os
 import time
 
-from gi.repository import Gdk, GLib, GObject, Gtk
+from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk
 
 from . import config, library, store, youtube
 from .util import fmt_time, track_name
-from .widgets import G, RowList, VideoArea, box, fmt_bytes, label, thumb_widget
+from .widgets import G, RowList, Timeline, VideoArea, box, fmt_bytes, label, thumb_widget
 
 TW, TH = 144, 81          # list thumbnails, 16:9
 ROW_H = 95
@@ -117,53 +118,128 @@ class View:
 
 # ===================================================================== watch
 class Watch(View):
+    """The video, with its controls over it (they fade while it plays), a
+    timeline with chapters and preview frames, and on the side what's next,
+    the chapters and the details. Fullscreen is zen: just the video."""
     name, title, glyph = "watch", "Watch", G["watch"]
-    hints = [("space", "play"), ("h l", "±5 s"), ("f", "fullscreen"), ("t", "theater"), ("c", "subtitles")]
+    hints = [("space", "play"), ("h l", "±5 s"), ("Q", "settings"), ("Tab", "side"), ("f", "fullscreen")]
+    SIDES = ["next", "chapters", "info"]
 
     def __init__(self, win):
         super().__init__(win)
-        self.area = VideoArea(self.core, lambda: not (win.app.mini and win.app.mini.get_visible()))
+        c = self.core
+        self.area = VideoArea(c, lambda: not (win.app.mini and win.app.mini.get_visible()))
         self.over = Gtk.Overlay(hexpand=True, vexpand=True)
         self.over.add_css_class("stage")
         self.over.set_child(self.area)
-        # what shows over the video: the idle message, a pause/buffering glyph, the OSD
-        self.idle = empty(G["eye"], "Nothing playing.\n\n3 searches YouTube · 2 opens your videos · 4 your history")
+        self.idle = empty(G["eye"], "Nothing playing.\n\n/ searches YouTube and your videos · 2 opens your library")
         self.idle.set_can_target(False)
         self.over.add_overlay(self.idle)
         self.center = label("", "glyph center-glyph", xalign=0.5, ellipsize=False, halign=Gtk.Align.CENTER,
                             valign=Gtk.Align.CENTER, can_target=False)
         self.over.add_overlay(self.center)
-        self.osd_title = label("", "osd-title")
-        self.osd_bar = Gtk.ProgressBar(hexpand=True, valign=Gtk.Align.CENTER)
-        self.osd_bar.add_css_class("osd-bar")
-        self.osd_time = label("", "time", ellipsize=False)
-        self.osd = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, valign=Gtk.Align.END,
-                                can_target=False)
-        self.osd.set_child(box(self.osd_title, box(self.osd_bar, self.osd_time, spacing=12), vertical=True,
-                               spacing=8, cls="osd"))
-        self.over.add_overlay(self.osd)
-        self.osd_timer = None
 
-        # the side: what's playing, then what's next
-        self.t = label("", "now-title", wrap=True, max_width_chars=34, lines=3)
-        self.t.set_ellipsize(3)
-        self.ch = label("", "now-sub", wrap=True, max_width_chars=34)
-        self.stats = label("", "now-stats", wrap=True, max_width_chars=34)
-        self.chips = box(spacing=6, cls="chips")
-        self.upnext = RowList(on_activate=lambda it: self.core.play_index(self.core.queue.index(it)), row_height=62)
-        self.upnext.add_css_class("upnext")
-        self.side = box(box(self.t, self.ch, self.stats, self.chips, vertical=True, spacing=5, cls="now"),
-                        section("Up next", label("1 for all", ellipsize=False)), self.upnext,
-                        vertical=True, cls="side")
-        self.side.set_size_request(360, -1)
-        self.side.set_hexpand(False)   # the video takes the width, not the list
-        self.widget = box(self.over, self.side)
+        # top: what it is
+        self.v_title = label("", "v-title")
+        self.v_meta = label("", "v-meta")
+        self.v_chips = box(spacing=6, valign=Gtk.Align.START)
+        self.top = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, valign=Gtk.Align.START,
+                                transition_duration=180)
+        self.top.set_child(box(box(self.v_title, self.v_meta, vertical=True, hexpand=True), self.v_chips,
+                               spacing=12, cls="v-top"))
+        self.over.add_overlay(self.top)
+
+        # bottom: the timeline and the buttons
+        self.timeline = Timeline(c.seek_to, self._hover)
+        self.pp = self._btn(G["play"], "Play / pause  (space)", c.toggle, big=True)
+        self.t_now = label("", "v-time", ellipsize=False)
+        self.chap = label("", "v-chapter")
+        self.volb = self._btn(G["vol"], "Mute  (m)", c.mute)
+        self.ccb = self._btn("CC", "Subtitles  (c)", c.cycle_subs)
+        self.fullb = self._btn(G["full"], "Fullscreen  (f)", win.toggle_fullscreen)
+        row = box(self.pp, self._btn(G["next"], "Next video  (>)", c.next), self.volb, self.t_now, self.chap,
+                  Gtk.Box(hexpand=True), self.ccb,
+                  self._btn(G["speed"], "Settings: quality, speed, subtitles, audio  (Q)", win.open_settings),
+                  self._btn(G["theater"], "Theater mode  (t)", win.toggle_theater),
+                  self._btn(G["pip"], "Mini player  (z)", win.app.show_mini), self.fullb, spacing=4)
+        self.bottom = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, valign=Gtk.Align.END,
+                                   transition_duration=180)
+        self.bottom.set_child(box(self.timeline, row, vertical=True, spacing=2, cls="v-bottom"))
+        self.over.add_overlay(self.bottom)
+
+        # the timeline's preview frame
+        self.pv_pic = Gtk.Picture(can_shrink=True, content_fit=Gtk.ContentFit.COVER)
+        self.pv_pic.set_size_request(176, 99)
+        self.pv_frame = box(self.pv_pic, cls="pv-frame")
+        self.pv_chap = label("", "pv-chap", xalign=0.5)
+        self.pv_time = label("", "pv-time", xalign=0.5, ellipsize=False)
+        self.preview = box(self.pv_frame, self.pv_chap, self.pv_time, vertical=True, spacing=2, halign=Gtk.Align.START,
+                           valign=Gtk.Align.END, can_target=False, visible=False, cls="pv")
+        self.over.add_overlay(self.preview)
+        self.pv_want = None
+
+        # zen (fullscreen): a small corner readout, nothing else
+        self.zen = label("", "zen", ellipsize=False, halign=Gtk.Align.END, valign=Gtk.Align.END, can_target=False)
+        self.zen_rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, halign=Gtk.Align.END,
+                                    valign=Gtk.Align.END, can_target=False, transition_duration=200)
+        self.zen_rev.set_child(self.zen)
+        self.over.add_overlay(self.zen_rev)
+        self.zen_timer = self.hide_timer = None
+        self.hovering_controls = False
+
+        for w in (self.top, self.bottom):
+            m = Gtk.EventControllerMotion()
+            m.connect("enter", lambda *_: setattr(self, "hovering_controls", True))
+            m.connect("leave", lambda *_: setattr(self, "hovering_controls", False))
+            w.add_controller(m)
         motion = Gtk.EventControllerMotion()
-        motion.connect("motion", lambda *_: self.win.fullscreened and self.show_osd())
+        motion.connect("motion", lambda *_: self.poke())
         self.over.add_controller(motion)
         click = Gtk.GestureClick()
         click.connect("pressed", self._clicked)
-        self.over.add_controller(click)
+        self.area.add_controller(click)
+
+        # the side: Up next · Chapters · Info
+        self.side_tab = "next"
+        self.side_btns = {}
+        tabs = box(spacing=4, cls="side-tabs")
+        for name, text in (("next", "Up next"), ("chapters", "Chapters"), ("info", "Info")):
+            b = label(text, "chip", ellipsize=False)
+            g = Gtk.GestureClick()
+            g.connect("pressed", lambda *_a, n=name: self.set_side(n))
+            b.add_controller(g)
+            self.side_btns[name] = b
+            tabs.append(b)
+        tabs.append(Gtk.Box(hexpand=True))
+        self.auto_chip = label("", "chip", ellipsize=False)
+        tabs.append(self.auto_chip)
+        self.upnext = RowList(on_activate=lambda it: c.play_index(c.queue.index(it)), row_height=62)
+        self.chapters = RowList(on_activate=lambda ch: c.seek_to(ch.get("time", 0)), row_height=40)
+        self.info = label("", "info", wrap=True, width_chars=38, max_width_chars=44, selectable=True,
+                          valign=Gtk.Align.START, hexpand=True)
+        info_sc = Gtk.ScrolledWindow(vexpand=True)
+        info_sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        info_sc.set_child(box(self.info, cls="info-box"))
+        self.side_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, vexpand=True)
+        self.side_stack.add_named(self.upnext, "next")
+        self.side_stack.add_named(self.chapters, "chapters")
+        self.side_stack.add_named(info_sc, "info")
+        self.side = box(tabs, self.side_stack, vertical=True, cls="side")
+        self.side.set_size_request(360, -1)
+        self.side.set_hexpand(False)
+        self.widget = box(self.over, self.side)
+        self.set_side("next")
+
+    # ------------------------------------------------------------ building
+    def _btn(self, glyph, tip, cb, big=False):
+        b = Gtk.Button(tooltip_text=tip, valign=Gtk.Align.CENTER)
+        b.set_child(label(glyph, ellipsize=False, xalign=0.5))
+        b.add_css_class("vbtn")
+        if big:
+            b.add_css_class("big")
+        b.set_focusable(False)
+        b.connect("clicked", lambda *_: cb())
+        return b
 
     def _clicked(self, _g, n, _x, _y):
         if n == 2:
@@ -172,28 +248,124 @@ class Watch(View):
             self.core.toggle()
 
     def list(self):
-        return self.upnext
+        if self.side_tab == "next":
+            return self.upnext
+        if self.side_tab == "chapters":
+            return self.chapters
+        return None
+
+    def set_side(self, name):
+        self.side_tab = name
+        self.side_stack.set_visible_child_name(name)
+        for n, b in self.side_btns.items():
+            (b.add_css_class if n == name else b.remove_css_class)("act")
+        if name == "info":
+            self.core.details(lambda d: self._fill_info())
+            self._fill_info()
 
     def set_theater(self, on):
         self.side.set_visible(not on)
 
-    def show_osd(self, secs=2.6):
-        self.osd.set_reveal_child(True)
-        if self.osd_timer:
-            GLib.source_remove(self.osd_timer)
-        self.osd_timer = GLib.timeout_add(int(secs * 1000), self._osd_hide)
+    # ------------------------------------------------------------ showing the controls
+    def poke(self, secs=2.5):
+        """Something happened (a key, the mouse): show the controls, then let
+        them fade while the video plays. Fullscreen shows none (zen)."""
+        if self.win.fullscreened:
+            return
+        self.top.set_reveal_child(self.core.current is not None)
+        self.bottom.set_reveal_child(True)
+        if self.hide_timer:
+            GLib.source_remove(self.hide_timer)
+        self.hide_timer = GLib.timeout_add(int(secs * 1000), self._fade)
 
-    def _osd_hide(self):
-        self.osd_timer = None
-        if not self.core.paused or not self.win.fullscreened:
-            self.osd.set_reveal_child(False)
+    def _fade(self):
+        self.hide_timer = None
+        c = self.core
+        if self.win.fullscreened or (c.current is not None and not c.paused and not c.idle and not self.hovering_controls):
+            self.top.set_reveal_child(False)
+            self.bottom.set_reveal_child(False)
+            self.preview.set_visible(False)
+        elif self.hovering_controls:
+            self.hide_timer = GLib.timeout_add(1500, self._fade)
         return False
 
+    def zen_note(self, text, secs=1.2):
+        """Fullscreen's only feedback: a small readout in the corner."""
+        if not self.win.fullscreened:
+            self.poke()
+            return
+        self.zen.set_text(text)
+        self.zen_rev.set_reveal_child(True)
+        if self.zen_timer:
+            GLib.source_remove(self.zen_timer)
+        self.zen_timer = GLib.timeout_add(int(secs * 1000), self._zen_hide)
+
+    def _zen_hide(self):
+        self.zen_timer = None
+        self.zen_rev.set_reveal_child(False)
+        return False
+
+    def enter_zen(self, on):
+        self.top.set_reveal_child(False if on else self.core.current is not None)
+        self.bottom.set_reveal_child(not on)
+        self.preview.set_visible(False)
+        self.set_theater(on or self.win.theater)
+        if not on:
+            self.zen_rev.set_reveal_child(False)
+            self.poke()
+
+    # ------------------------------------------------------------ hover preview
+    def _hover(self, t, x):
+        if t is None:
+            self.preview.set_visible(False)
+            self.pv_want = None
+            return
+        self.poke()
+        c = self.core
+        ch = self._chapter_at(t)
+        self.pv_chap.set_text(ch)
+        self.pv_chap.set_visible(bool(ch))
+        self.pv_time.set_text(fmt_time(t))
+        ok, rect = self.timeline.compute_bounds(self.over)
+        left = (rect.get_x() if ok else 0) + x - 90
+        self.preview.set_margin_start(int(max(8, min(left, self.over.get_width() - 190))))
+        self.preview.set_margin_bottom(int(self.over.get_height() - (rect.get_y() if ok else 0) + 6))
+        self.preview.set_visible(True)
+        want = round(t / 5)
+        if want == self.pv_want:
+            return
+        self.pv_want = want
+
+        def got(r, want=want):
+            if r is None or want != self.pv_want:
+                return
+            path, x0, y0, w, h = r
+            try:
+                pb = GdkPixbuf.Pixbuf.new_from_file(path)
+                if w and h:
+                    pb = pb.new_subpixbuf(x0, y0, min(w, pb.get_width() - x0), min(h, pb.get_height() - y0))
+                self.pv_pic.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
+                self.pv_frame.set_visible(True)
+            except GLib.Error:
+                pass
+        self.pv_frame.set_visible(self.pv_pic.get_paintable() is not None)
+        c.preview(t, got)
+
+    def _chapter_at(self, t):
+        name = ""
+        for ch in self.core.chapters:
+            if ch.get("time", 0) <= t + 0.1:
+                name = ch.get("title") or ""
+        return name
+
+    # ------------------------------------------------------------ refreshing
     def tick(self, t):
-        d = self.core.duration
-        if self.osd.get_reveal_child():
-            self.osd_bar.set_fraction(t / d if d else 0)
-            self.osd_time.set_text(f"{fmt_time(t)} / {fmt_time(d)}" if d else fmt_time(t))
+        c = self.core
+        self.timeline.update(c.duration, t, c.buffered, c.chapters)
+        d = c.duration
+        self.t_now.set_text(f"{fmt_time(t)} / {fmt_time(d)}" if d else (fmt_time(t) if c.current else ""))
+        ch = self._chapter_at(t)
+        self.chap.set_text(f"· {ch}" if ch else "")
 
     def refresh(self, event=None):
         c = self.core
@@ -205,30 +377,40 @@ class Watch(View):
             glyph = ""
             if cur is not None and c.buffering:
                 glyph = G["radio"]
-            elif cur is not None and c.paused and not c.idle:
+            elif cur is not None and c.paused and not c.idle and not self.win.fullscreened:
                 glyph = G["pause"]
             self.center.set_text(glyph)
             self.center.set_visible(bool(glyph))
-            self.osd_title.set_text(cur["title"] if cur else "")
+            self.pp.get_child().set_text(G["play"] if c.paused or c.idle else G["pause"])
+            self.volb.get_child().set_text(G["mute"] if c.muted or c.volume == 0 else G["vol"])
+            self.fullb.get_child().set_text(G["unfull"] if self.win.fullscreened else G["full"])
+            if event == "player" and c.paused:
+                self.poke(30)   # paused: the controls stay
         if event in (None, "video", "history"):
+            self.v_title.set_text(cur.get("title") or "" if cur else "")
             if cur is None:
-                self.t.set_text("Nothing playing")
-                self.ch.set_text("")
-                self.stats.set_text("")
+                self.v_meta.set_text("")
             else:
-                self.t.set_text(cur.get("title") or "")
-                self.ch.set_text(cur.get("channel") or meta(cur) if cur.get("url") else
-                                 cur.get("channel") or os.path.dirname(cur.get("file") or ""))
-                self.stats.set_text(" · ".join(p for p in (youtube.views(cur.get("views")),
-                                                           youtube.ago(cur.get("uploaded"))) if p))
+                parts = [cur.get("channel") or (os.path.dirname(cur.get("file") or "").replace(os.path.expanduser("~"), "~")
+                                                if cur.get("file") else meta(cur)),
+                         youtube.views(cur.get("views")), youtube.ago(cur.get("uploaded"))]
+                self.v_meta.set_text(" · ".join(p for p in parts if p))
+            if self.side_tab == "info":
+                self._fill_info()
         if event in (None, "video", "tracks", "player", "options"):
             self._chips()
+            self._chapters()
+            self.auto_chip.set_text(f"autoplay {'on' if c.autoplay else 'off'} · M")
+            (self.auto_chip.add_css_class if c.autoplay else self.auto_chip.remove_css_class)("act")
+            subs = any(t.get("type") == "sub" for t in c.tracks)
+            self.ccb.set_sensitive(subs)
+            (self.ccb.add_css_class if any(t.get("type") == "sub" and t.get("selected") for t in c.tracks)
+             else self.ccb.remove_css_class)("on")
         if event in (None, "queue", "video", "thumbs", "options", "downloads"):
             rows = []
             nxt = c.queue[c.cur + 1:c.cur + 9] if c.cur >= 0 else c.queue[:8]
             for it in nxt:
-                thumb = thumb_widget(self.win.thumb(it), 96, 54, G["yt"] if it.get("yt") else G["film"],
-                                     self.progress(it))
+                thumb = thumb_widget(self.win.thumb(it), 104, 58, G["yt"] if it.get("yt") else G["film"], self.progress(it))
                 text = box(label(it.get("title") or "?", "t", wrap=True, max_width_chars=26, lines=2),
                            label(it.get("channel") or meta(it), "a"), vertical=True, spacing=2, hexpand=True,
                            valign=Gtk.Align.CENTER)
@@ -237,51 +419,97 @@ class Watch(View):
                 if it.get("auto"):
                     w.add_css_class("auto")
                 rows.append(("item", it, w))
-            msg = ("Autoplay will find more when this ends" if c.autoplay else "Nothing next · M turns autoplay on")
+            msg = ("Autoplay finds more when this ends" if c.autoplay else "Nothing next · M turns autoplay on")
             self.upnext.set_rows(rows, empty=label(msg, "dim", xalign=0.5, wrap=True, margin_top=20))
 
     def _chips(self):
         c = self.core
-        child = self.chips.get_first_child()
+        child = self.v_chips.get_first_child()
         while child:
             nxt = child.get_next_sibling()
-            self.chips.remove(child)
+            self.v_chips.remove(child)
             child = nxt
         if c.current is None:
             return
-        vt = next((t for t in c.tracks if t.get("type") == "video" and t.get("selected")), None)
-        if vt and vt.get("demux-h"):
-            self.chips.append(label(f"{vt['demux-h']}p", "chip", ellipsize=False))
+        h = c.current_height()
+        if h:
+            self.v_chips.append(label(f"{h}p", "vchip", ellipsize=False))
         sub = next((t for t in c.tracks if t.get("type") == "sub" and t.get("selected")), None)
-        nsubs = sum(1 for t in c.tracks if t.get("type") == "sub")
-        if nsubs:
-            self.chips.append(label(f"CC {track_name(sub) if sub else 'off'}", "chip act" if sub else "chip",
-                                    ellipsize=False, max_width_chars=18))
+        if sub:
+            self.v_chips.append(label(f"CC {track_name(sub)}", "vchip", ellipsize=False, max_width_chars=16))
         if c.speed != 1:
-            self.chips.append(label(f"{c.speed:g}×", "chip act", ellipsize=False))
-        if c.chapters and c.chapter >= 0:
-            ch = c.chapters[c.chapter].get("title") or f"Chapter {c.chapter + 1}"
-            self.chips.append(label(f"{c.chapter + 1}/{len(c.chapters)} · {ch}", "chip", max_width_chars=26))
+            self.v_chips.append(label(f"{c.speed:g}×", "vchip", ellipsize=False))
         if c.current.get("live"):
-            self.chips.append(label("● LIVE", "chip live", ellipsize=False))
-        if (c.current.get("yt") or c.current.get("url")) and c.downloaded(c.current) and not c.current.get("file"):
-            self.chips.append(label("from disk", "chip", ellipsize=False))
+            self.v_chips.append(label("● LIVE", "vchip live", ellipsize=False))
+        elif c.downloaded(c.current) and not c.current.get("file"):
+            self.v_chips.append(label("from disk", "vchip", ellipsize=False))
 
+    def _chapters(self):
+        c = self.core
+        rows = []
+        for i, ch in enumerate(c.chapters):
+            cur = i == c.chapter
+            w = box(label(fmt_time(ch.get("time", 0)), "dur", ellipsize=False),
+                    label(ch.get("title") or f"Chapter {i + 1}", "title", hexpand=True), spacing=12,
+                    cls="chapter-row playing" if cur else "chapter-row")
+            rows.append(("item", ch, w))
+        self.side_btns["chapters"].set_text(f"Chapters · {len(c.chapters)}" if c.chapters else "Chapters")
+        self.chapters.set_rows(rows, empty=label("This video has no chapters", "dim", xalign=0.5, margin_top=20))
+
+    def _fill_info(self):
+        c = self.core
+        cur = c.current
+        if cur is None:
+            self.info.set_text("")
+            return
+        lines = [cur.get("title") or ""]
+        if cur.get("yt"):
+            lines.append(youtube.watch_url(cur["yt"]))
+        elif cur.get("url"):
+            lines.append(cur["url"])
+        elif cur.get("file"):
+            lines.append(cur["file"])
+        facts = []
+        if cur.get("views"):
+            facts.append(f"{cur['views']:,} views")
+        if cur.get("uploaded"):
+            facts.append(time.strftime("%d %b %Y", time.localtime(cur["uploaded"])))
+        h = c.current_height()
+        if h:
+            facts.append(f"{h}p")
+        if facts:
+            lines.append(" · ".join(facts))
+        d = c._details.get(cur.get("yt")) if cur.get("yt") else None
+        if d and d.get("description"):
+            lines += ["", d["description"]]
+        elif cur.get("yt"):
+            lines += ["", "Loading the description…"]
+        self.info.set_text("\n".join(lines))
+
+    # ------------------------------------------------------------ keys
     def key(self, k, n):
         c = self.core
         step = c.conf["fine_step"]
         if k == "h":
             c.seek(-step * n)
-            self.win.osd_or_toast(f"Back {step * n} s")
+            self.win.feedback(f"{G['back']} {step * n} s")
             return True
         if k == "l":
             c.seek(step * n)
-            self.win.osd_or_toast(f"Forward {step * n} s")
+            self.win.feedback(f"{G['fwd']} {step * n} s")
+            return True
+        if k == "Tab":
+            self.set_side(self.SIDES[(self.SIDES.index(self.side_tab) + 1) % len(self.SIDES)])
+            if self.win.theater:
+                self.win.toggle_theater()
             return True
         if k == "Return":
-            it = self.upnext.selected()
-            if it is not None and it in c.queue:
-                c.play_index(c.queue.index(it))
+            lst = self.list()
+            sel = lst.selected() if lst else None
+            if self.side_tab == "chapters" and sel is not None:
+                c.seek_to(sel.get("time", 0))
+            elif sel is not None and sel in c.queue:
+                c.play_index(c.queue.index(sel))
             else:
                 c.toggle()
             return True
@@ -432,180 +660,235 @@ class Queue(View):
 
 # ===================================================================== library
 class Library(View):
-    """Your folders as columns, like yazi: h/l move between them."""
+    """Your videos as a grid: Continue watching first, then folders and
+    videos; inside a folder, its episodes in order with how much you've
+    seen. h j k l move, Enter opens or plays, Backspace goes up."""
     name, title, glyph = "library", "Library", G["lib"]
-    hints = [("h l", "folders"), ("Enter", "play"), ("a", "add"), ("A", "play next"), ("/", "search")]
+    hints = [("h j k l", "move"), ("Enter", "open / play"), ("Backspace", "up"), ("a", "add"), ("/", "search")]
+    CW, CH = 208, 117
 
     def __init__(self, win):
         super().__init__(win)
-        self.cols = []        # [(path, RowList)]
-        self.focus = 0
-        self.searching = None
-        self.inner = box(hexpand=True, vexpand=True)
-        self.widget = self.inner
+        self.path = None          # None: the top (Continue watching + your folders)
+        self.cards = []           # [(data, widget)]
+        self.sel = 0
+        self.inner = box(vertical=True, cls="grid-page")
+        self.scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
+        self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scroll.set_child(self.inner)
+        self.crumb = label("", "crumb")
+        self.widget = box(box(self.crumb, cls="grid-head"), self.scroll, vertical=True)
         self.loaded = False
-
-    def list(self):
-        return self.cols[self.focus][1] if self.cols else None
+        self.data = None          # what the last scan found, for repainting
 
     def shown(self):
         if not self.loaded:
             self.loaded = True
-            self.reload()
-
-    def reload(self):
-        dirs = [d for d in self.core.conf["video_dirs"] if os.path.isdir(d)]
-        for _p, col in self.cols:
-            self.inner.remove(col.get_parent())
-        self.cols = []
-        if not dirs:
-            col = RowList()
-            col.set_rows([], empty=empty(G["folder"], "No video folders.\n\nSet video_dirs in ~/.config/drishya/config.toml\n"
-                                                     f"(now: {', '.join(self.core.conf['video_dirs'])})"))
-            self._add_col("", col, "Library")
-            return
-        roots = [{"name": os.path.basename(d.rstrip("/")) or d, "path": d, "root": True} for d in dirs]
-        if len(roots) == 1:
-            self._open(0, roots[0]["path"], roots[0]["name"])
-        else:
-            col = RowList(on_select=lambda d: self._preview(0, d), row_height=40)
-            col.set_rows([("item", r, self._folder_row(r)) for r in roots])
-            self._add_col("", col, "Folders")
-
-    def _add_col(self, path, col, title):
-        frame = box(section(title), col, vertical=True, cls="col")
-        self.inner.append(frame)
-        self.cols.append((path, col))
-        self._widths()
-        self._paint_focus()
-
-    def _widths(self):
-        """Folder columns stay narrow; the last one (the videos) takes the rest."""
-        for j, (_p, col) in enumerate(self.cols):
-            frame = col.get_parent()
-            last = j == len(self.cols) - 1
-            frame.set_hexpand(last)
-            frame.set_size_request(-1 if last else 280, -1)
-
-    def _fill_col(self, col, folders, videos, keep=True):
-        col.data = (folders, videos)
-        rows = [("item", f, self._folder_row(f)) for f in folders if f["n"]]
-        rows += [("item", v, self._video_row(v)) for v in videos]
-        col.set_rows(rows, keep=keep, empty=label("No videos here", "dim", xalign=0.5, margin_top=30))
+            self.open(None)
 
     def refresh(self, event=None):
-        if event in ("thumbs", "history", "downloads"):
-            for _p, col in self.cols:
-                if getattr(col, "data", None):
-                    self._fill_col(col, *col.data)
+        if event in ("thumbs", "history", "downloads") and self.data is not None:
+            self._paint(*self.data, keep=True)
 
-    def _folder_row(self, d):
-        return box(label(G["folder"], "glyph folder-glyph", ellipsize=False), label(d["name"], "title", hexpand=True),
-                   label(str(d["n"]) if d.get("n") else "", "dim", ellipsize=False), spacing=10, cls="folder-row")
+    # ------------------------------------------------------------ loading
+    def open(self, path, select=None):
+        self.path = path
+        dirs = [d for d in self.core.conf["video_dirs"] if os.path.isdir(d)]
+        cache = os.path.join(config.CACHE, "thumbs")
+        home = os.path.expanduser("~")
+        self.crumb.set_text(("Library" if path is None else path.replace(home, "~")) +
+                            ("" if path is None else "   ·   Backspace goes up"))
 
-    def _video_row(self, v):
-        return self.row(v, self.badges(v))
-
-    def _open(self, at, path, title):
-        """Shows path's contents as column `at` (dropping the ones after it)."""
-        while len(self.cols) > at:
-            p, col = self.cols.pop()
-            self.inner.remove(col.get_parent())
         def work():
-            folders, videos = library.listdir(path)
-            for f in folders:
-                f["n"] = library.count_videos(f["path"], 99)
-            for v in videos[:300]:
-                v["duration"] = library.probe(v["file"], os.path.join(config.CACHE, "thumbs")).get("duration", 0)
-            return folders, videos
+            sections = []
+            if path is None:
+                cont = [dict(e) for _k, e in self.core.store.unfinished()][:8]
+                if cont:
+                    sections.append(("Continue watching", cont))
+                for d in dirs:
+                    folders, videos = library.listdir(d)
+                    for f in folders:
+                        f["n"] = library.count_videos(f["path"], 99)
+                    items = [f for f in folders if f["n"]] + videos
+                    if items:
+                        sections.append((d.replace(home, "~"), items))
+            else:
+                folders, videos = library.listdir(path)
+                for f in folders:
+                    f["n"] = library.count_videos(f["path"], 99)
+                folders = [f for f in folders if f["n"]]
+                if folders:
+                    sections.append(("Folders", folders))
+                if videos:
+                    eps = sum(1 for v in videos if library.episode(v["file"]))
+                    sections.append(("Episodes" if eps > len(videos) / 2 else "Videos", videos))
+            for _t, items in sections:
+                for v in items:
+                    if "file" in v and not v.get("duration"):
+                        v["duration"] = library.probe(v["file"], cache).get("duration", 0)
+            return sections
 
-        col = RowList(on_activate=lambda d: self._enter(d), on_select=lambda d: self._preview(at, d), row_height=ROW_H)
-        col.set_rows([], empty=label("Reading…", "dim", xalign=0.5, margin_top=30))
-        self._add_col(path, col, title)
+        def then(sections):
+            if self.path == path:
+                self.data = (sections,)
+                self._paint(sections, select=select)
+        self.core.bg(work, then)
 
-        self.core.bg(work, lambda r: self._fill_col(col, *r, keep=False))
+    # ------------------------------------------------------------ drawing
+    def _card(self, d):
+        if "path" in d:   # a folder
+            tile = box(label(G["folder"], "glyph folder-big", xalign=0.5, ellipsize=False, hexpand=True,
+                             valign=Gtk.Align.CENTER), cls="thumb folder-tile")
+            tile.set_size_request(self.CW, self.CH)
+            return box(tile, label(d["name"], "card-title"), label(f"{d['n']} video{'s' if d['n'] != 1 else ''}",
+                                                                     "card-sub"), vertical=True, spacing=3, cls="card")
+        e = self.core.store.entry(d)
+        sub = os.path.basename(os.path.dirname(d.get("file") or "")) if d.get("file") else meta(d)
+        if e and e.get("finished"):
+            sub = "watched"
+        elif e and store.resume_at(e) > 0 and e.get("duration"):
+            sub = f"{fmt_time(e['duration'] - e['pos'])} left"
+        thumb = thumb_widget(self.win.thumb(d), self.CW, self.CH, G["yt"] if d.get("yt") else G["film"], self.progress(d))
+        if d.get("duration"):
+            over = thumb
+            over.add_overlay(label(fmt_time(d["duration"]), "card-dur", ellipsize=False, halign=Gtk.Align.END,
+                                   valign=Gtk.Align.END))
+        t = label(" ".join((d.get("title") or "?").split()), "card-title", wrap=True, lines=2, max_width_chars=26)
+        t.set_ellipsize(3)
+        return box(thumb, t, label(sub, "card-sub"), vertical=True, spacing=3, cls="card")
 
-    def _preview(self, at, d):
-        # Selecting a folder doesn't open it (that's l / Enter): keeps j/k quick.
-        pass
+    def _paint(self, sections, select=None, keep=False):
+        old = self.cards[self.sel][0] if keep and 0 <= self.sel < len(self.cards) else None
+        child = self.inner.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self.inner.remove(child)
+            child = nxt
+        self.cards = []
+        for title, items in sections:
+            self.inner.append(label(title, "grid-title"))
+            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, min_children_per_line=2,
+                               max_children_per_line=12, column_spacing=16, row_spacing=18, valign=Gtk.Align.START)
+            flow.add_css_class("grid")
+            for d in items:
+                w = self._card(d)
+                i = len(self.cards)
+                g = Gtk.GestureClick()
+                g.connect("pressed", lambda _g, n, *_a, i=i: self._clicked(i, n))
+                w.add_controller(g)
+                flow.append(w)
+                self.cards.append((d, w))
+            self.inner.append(flow)
+        if not self.cards:
+            dirs = ", ".join(self.core.conf["video_dirs"])
+            self.inner.append(empty(G["folder"], "No videos here.\n\nYour folders are video_dirs in "
+                                                 f"~/.config/drishya/config.toml (now: {dirs})."))
+        target = old if old is not None else select
+        self.sel = 0
+        if target is not None:
+            for i, (d, _w) in enumerate(self.cards):
+                if d == target or ("path" in d and isinstance(target, str) and d["path"] == target):
+                    self.sel = i
+        self._select(self.sel)
 
-    def _enter(self, d):
-        if d is None:
+    def _clicked(self, i, n):
+        self._select(i)
+        if n == 2:
+            self._enter()
+
+    def _select(self, i):
+        if not self.cards:
             return
-        if "path" in d:
-            i = next((j for j, (_p, col) in enumerate(self.cols) if col.selected() is d), self.focus)
-            self._open(i + 1, d["path"], d["name"])
-            self.focus = i + 1
-            self._paint_focus()
-        else:
-            self._play_from(d, "play")
+        self.sel = max(0, min(len(self.cards) - 1, i))
+        for j, (_d, w) in enumerate(self.cards):
+            (w.add_css_class if j == self.sel else w.remove_css_class)("sel")
+        GLib.idle_add(self._scroll_to)
 
-    def _play_from(self, v, where):
-        """Plays v, with the rest of its folder after it (the next episodes)."""
-        col = self.list()
-        vids = [x for x in col.items if "file" in x] if col else [v]
-        rest = vids[vids.index(v):] if v in vids and where == "play" else [v]
-        if where == "play":
-            self.play(*rest)
-        else:
-            self.core.add(rest, where)
-
-    def _paint_focus(self):
-        for j, (_p, col) in enumerate(self.cols):
-            (col.get_parent().add_css_class if j == self.focus else col.get_parent().remove_css_class)("focus")
-
-    def key(self, k, n):
-        col = self.list()
-        d = col.selected() if col else None
-        if k == "l" or (k == "Return" and d is not None and "path" in d):
-            if d is not None and "path" in d:
-                self._enter(d)
-            elif d is not None:
-                self._play_from(d, "play")
-            return True
-        if k == "h":
-            if self.focus > 0:
-                self.focus -= 1
-                while len(self.cols) > self.focus + 2:
-                    _p, c = self.cols.pop()
-                    self.inner.remove(c.get_parent())
-                self._widths()
-                self._paint_focus()
-            return True
-        if k == "Return" and d is not None:
-            self._play_from(d, "play")
-            return True
-        if k in ("a", "A") and col is not None:
-            sel = [col.items[i] for i in col.range() if "file" in col.items[i]]
-            if d is not None and "path" in d and not sel:
-                _, vids = library.listdir(d["path"])
-                sel = vids
-            self.core.add(sel, "end" if k == "a" else "next")
-            col.visual(False)
-            self.win.set_mode("NORMAL")
-            return True
-        if k == "R":
-            self.reload()
-            self.win.toast("Library reloaded")
-            return True
+    def _scroll_to(self):
+        if not (0 <= self.sel < len(self.cards)):
+            return False
+        ok, r = self.cards[self.sel][1].compute_bounds(self.inner)
+        if ok:
+            adj = self.scroll.get_vadjustment()
+            if r.get_y() - 40 < adj.get_value():
+                adj.set_value(max(0, r.get_y() - 40))
+            elif r.get_y() + r.get_height() + 16 > adj.get_value() + adj.get_page_size():
+                adj.set_value(r.get_y() + r.get_height() + 16 - adj.get_page_size())
         return False
 
-    def search(self, q):
-        dirs = [d for d in self.core.conf["video_dirs"] if os.path.isdir(d)]
+    def _vertical(self, d):
+        """The card above (d=-1) or below (1): the nearest by position."""
+        if not self.cards:
+            return
+        ok, cur = self.cards[self.sel][1].compute_bounds(self.inner)
+        if not ok:
+            return
+        cx, cy = cur.get_x() + cur.get_width() / 2, cur.get_y()
+        best = None
+        for i, (_d, w) in enumerate(self.cards):
+            ok, r = w.compute_bounds(self.inner)
+            if not ok:
+                continue
+            dy = r.get_y() - cy
+            if (d > 0 and dy <= 4) or (d < 0 and dy >= -4):
+                continue
+            score = (abs(dy), abs(r.get_x() + r.get_width() / 2 - cx))
+            if best is None or score < best[0]:
+                best = (score, i)
+        if best:
+            self._select(best[1])
 
-        def then(found):
-            while len(self.cols) > 0:
-                _p, c = self.cols.pop()
-                self.inner.remove(c.get_parent())
-            col = RowList(on_activate=lambda v: self._play_from(v, "play"), row_height=ROW_H)
-            self._add_col("", col, f"Search: {q} · R for the folders")
-            if found:
-                self._fill_col(col, [], found)
-            else:
-                col.set_rows([], empty=empty(G["search"], f"No video matches “{q}”"))
-            self.focus = 0
-            self._paint_focus()
-        self.core.bg(lambda: library.search(dirs, q), then)
+    # ------------------------------------------------------------ doing
+    def _enter(self):
+        if not self.cards:
+            return
+        d = self.cards[self.sel][0]
+        if "path" in d:
+            self.open(d["path"])
+            return
+        vids = [x for x, _w in self.cards if "file" in x and "path" not in x]
+        if d in vids and self.path is not None:
+            self.play(*vids[vids.index(d):])   # this one, then the rest of the folder (the next episodes)
+        else:
+            self.play({k: v for k, v in d.items() if k in ("yt", "file", "url", "title", "channel", "thumb", "duration")})
+
+    def _up(self):
+        if self.path is None:
+            return
+        dirs = [d.rstrip("/") for d in self.core.conf["video_dirs"]]
+        parent = None if self.path.rstrip("/") in dirs else os.path.dirname(self.path.rstrip("/"))
+        self.open(parent, select=self.path)
+
+    def key(self, k, n):
+        if k == "h":
+            self._select(self.sel - n)
+        elif k == "l":
+            self._select(self.sel + n)
+        elif k == "j":
+            for _ in range(n):
+                self._vertical(1)
+        elif k == "k":
+            for _ in range(n):
+                self._vertical(-1)
+        elif k in ("gg",):
+            self._select(0)
+        elif k == "G":
+            self._select(len(self.cards) - 1)
+        elif k == "Return":
+            self._enter()
+        elif k in ("BackSpace", "-"):
+            self._up()
+        elif k in ("a", "A") and self.cards:
+            d = self.cards[self.sel][0]
+            items = library.listdir(d["path"])[1] if "path" in d else [d]
+            self.core.add(items, "end" if k == "a" else "next")
+        elif k == "R":
+            self.open(self.path)
+            self.win.finder.refresh_index(force=True)
+            self.win.toast("Library reloaded")
+        else:
+            return False
+        return True
 
 
 # ===================================================================== youtube

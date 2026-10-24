@@ -116,13 +116,40 @@ def related(vid, title="", channel="", n=20):
 
 
 def info(vid):
-    """A video's details (an item drishya can show) and the heights it's
-    offered in, from one yt-dlp call: (item, heights)."""
+    """A video's details (an item drishya can show), the heights it's
+    offered in, and its storyboard (the timeline's preview frames), from
+    one yt-dlp call: (item, heights, storyboard or None)."""
     d = json.loads(_run(["-J", "--no-playlist", watch_url(vid)], timeout=45))
     it = entry(d)
+    it["description"] = (d.get("description") or "")[:2000]
     if d.get("thumbnail"):
         it["thumb"] = thumb(vid)
-    return it, _heights(d)
+    return it, _heights(d), storyboard(d)
+
+
+def storyboard(d):
+    """YouTube's preview frames: images that are grids of small frames.
+    The 160x90 one (sb1) when there is one: {"w", "h", "rows", "cols",
+    "fps", "frags": [{"url", "duration"}]}."""
+    boards = [f for f in d.get("formats") or [] if f.get("format_note") == "storyboard" and f.get("fragments")]
+    if not boards:
+        return None
+    b = min(boards, key=lambda f: abs((f.get("width") or 0) - 160))
+    return {"w": b.get("width"), "h": b.get("height"), "rows": b.get("rows") or 1, "cols": b.get("columns") or 1,
+            "fps": b.get("fps") or 0, "frags": [{"url": f["url"], "duration": f.get("duration") or 0}
+                                                 for f in b["fragments"] if f.get("url")]}
+
+
+def storyboard_cell(sb, t):
+    """(fragment index, x, y) of the frame nearest t seconds, or None."""
+    if not sb or not sb.get("fps") or not sb.get("frags"):
+        return None
+    per = sb["rows"] * sb["cols"]
+    frame = int(max(0, t) * sb["fps"])
+    frag, cell = divmod(frame, per)
+    if frag >= len(sb["frags"]):
+        frag, cell = len(sb["frags"]) - 1, per - 1
+    return frag, (cell % sb["cols"]) * sb["w"], (cell // sb["cols"]) * sb["h"]
 
 
 def qualities(vid):

@@ -277,3 +277,97 @@ class VideoArea(Gtk.GLArea):
         s = self.get_scale_factor()
         self.core.draw(mpv.current_fbo(), self.get_width() * s, self.get_height() * s)
         return True
+
+
+class Timeline(Gtk.DrawingArea):
+    """The video's timeline: chapters as segments with small gaps, what's
+    buffered, what's played; thicker with a knob under the pointer. on_seek(t)
+    on click or drag; on_hover(t, x) while the pointer moves over it (None
+    when it leaves)."""
+
+    def __init__(self, on_seek, on_hover):
+        super().__init__(hexpand=True, height_request=22)
+        self.add_css_class("timeline")
+        self.on_seek, self.on_hover = on_seek, on_hover
+        self.duration = self.pos = self.buffered = 0.0
+        self.chapters = []
+        self.hover_x = None
+        self.colors = {"played": (0.92, 0.44, 0.57), "rest": (1, 1, 1, 0.30), "buf": (1, 1, 1, 0.50)}
+        self.set_draw_func(self._draw)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._motion)
+        motion.connect("leave", self._leave)
+        self.add_controller(motion)
+        click = Gtk.GestureClick()
+        click.connect("pressed", lambda _g, _n, x, _y: self._seek(x))
+        self.add_controller(click)
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-update", self._drag)
+        self.add_controller(drag)
+        self.set_cursor(Gdk.Cursor.new_from_name("pointer"))
+
+    def set_accent(self, rgb):
+        self.colors["played"] = rgb
+
+    def update(self, duration, pos, buffered, chapters):
+        self.duration, self.pos, self.buffered = duration or 0.0, pos or 0.0, buffered or 0.0
+        self.chapters = [c.get("time", 0) for c in chapters or [] if c.get("time", 0) > 0.5]
+        self.queue_draw()
+
+    def time_at(self, x):
+        w = self.get_width() or 1
+        return max(0.0, min(1.0, x / w)) * self.duration
+
+    def _seek(self, x):
+        if self.duration:
+            self.on_seek(self.time_at(x))
+
+    def _drag(self, g, dx, _dy):
+        ok, sx, _sy = g.get_start_point()
+        if ok:
+            self._seek(sx + dx)
+            self.hover_x = sx + dx
+            self.on_hover(self.time_at(sx + dx), sx + dx)
+
+    def _motion(self, _c, x, _y):
+        self.hover_x = x
+        self.queue_draw()
+        if self.duration:
+            self.on_hover(self.time_at(x), x)
+
+    def _leave(self, *_):
+        self.hover_x = None
+        self.queue_draw()
+        self.on_hover(None, None)
+
+    def _draw(self, _area, cr, w, h):
+        if not self.duration:
+            cr.set_source_rgba(1, 1, 1, 0.18)
+            cr.rectangle(0, h / 2 - 1.5, w, 3)
+            cr.fill()
+            return
+        thick = 7 if self.hover_x is not None else 5
+        y = h / 2 - thick / 2
+        # a soft dark edge under the whole line, so it reads over any picture
+        cr.set_source_rgba(0, 0, 0, 0.35)
+        cr.rectangle(0, y - 1, w, thick + 2)
+        cr.fill()
+        cuts = [0.0] + [c / self.duration for c in self.chapters if c < self.duration] + [1.0]
+        gap = 3 if len(cuts) > 2 else 0
+        played = self.pos / self.duration
+        buf = min(1.0, (self.pos + self.buffered) / self.duration) if self.buffered else played
+        for a, b in zip(cuts, cuts[1:], strict=False):
+            x0, x1 = a * w + (gap / 2 if a > 0 else 0), b * w - (gap / 2 if b < 1 else 0)
+            if x1 <= x0:
+                continue
+            for upto, color in ((1.0, self.colors["rest"]), (buf, self.colors["buf"]), (played, self.colors["played"])):
+                end = min(x1, upto * w)
+                if end > x0:
+                    cr.set_source_rgba(*color) if len(color) == 4 else cr.set_source_rgb(*color)
+                    cr.rectangle(x0, y, end - x0, thick)
+                    cr.fill()
+        if self.hover_x is not None:
+            import math
+            cr.set_source_rgb(*self.colors["played"])
+            cr.arc(played * w, h / 2, 7, 0, 2 * math.pi)
+            cr.fill()

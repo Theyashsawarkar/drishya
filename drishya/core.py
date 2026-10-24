@@ -52,6 +52,9 @@ class Core:
         q = settings.get("quality")
         self.quality = q if isinstance(q, int) and 144 <= q <= 4320 else self.conf["quality"]
         self._qualities = {}          # yt id -> heights YouTube offers (asked once)
+        self._boards = {}             # yt id -> its storyboard (preview frames), None when it has none
+        self._details = {}            # yt id -> description etc. (asked once, for Info)
+        self._asking = set()
         self.queue = [dict(it, id=next(_ids)) for it in store.load_json(os.path.join(config.STATE, "queue.json"), [])
                       if isinstance(it, dict) and (it.get("yt") or it.get("file"))]
         self.cur = -1
@@ -63,6 +66,7 @@ class Core:
         self.paused = True
         self.idle = True
         self.buffering = False
+        self.buffered = 0.0
         self.volume = float(settings.get("volume", 100))
         self.muted = False
         self.speed = 1.0
@@ -144,7 +148,7 @@ class Core:
                           ("speed", mpv.FMT_DOUBLE), ("track-list", mpv.FMT_NODE), ("chapter-list", mpv.FMT_NODE),
                           ("chapter", mpv.FMT_INT64), ("sid", mpv.FMT_NODE), ("aid", mpv.FMT_NODE),
                           ("sub-visibility", mpv.FMT_FLAG), ("media-title", mpv.FMT_STRING),
-                          ("seekable", mpv.FMT_FLAG)):
+                          ("seekable", mpv.FMT_FLAG), ("demuxer-cache-time", mpv.FMT_DOUBLE)):
             p.observe(name, fmt)
 
     # ------------------------------------------------------------ mpv events
@@ -180,6 +184,9 @@ class Core:
             elif prop == "mute":
                 self.muted = bool(v)
                 self.emit("player")
+            elif prop == "demuxer-cache-time":
+                self.buffered = v or 0.0
+                return
             elif prop == "media-title":
                 cur = self.current
                 # a link's real name, once mpv read it (an HLS playlist's, a page's title)
@@ -368,6 +375,77 @@ class Core:
         self.toast(f"Quality: up to {self.quality}p" + (" · downloads use it too" if it.get("yt") or it.get("url") else ""))
         self.emit("tracks", "options")
 
+    # ------------------------------------------------------------ preview frames (timeline hover)
+    def details(self, then):
+        """then(details or None): a YouTube video's description and storyboard
+        (asked once per video, in the background)."""
+        it = self.current
+        if not it or not it.get("yt"):
+            then(None)
+            return
+        vid = it["yt"]
+        if vid in self._details:
+            then(self._details[vid])
+            return
+        if vid in self._asking:
+            return
+        self._asking.add(vid)
+
+        def got(r):
+            self._asking.discard(vid)
+            d, heights, board = r
+            self._details[vid], self._qualities[vid], self._boards[vid] = d, heights, board
+            then(d)
+        self.bg(lambda: youtube.info(vid), got, lambda e: self._asking.discard(vid))
+
+    def preview(self, t, then):
+        """then((path, x, y, w, h) or None): a frame near t seconds of what's
+        playing, for the timeline's hover. YouTube: its storyboard;
+        files: ffmpeg, a frame per 5 s, cached."""
+        it = self.current
+        if it is None:
+            return
+        cache = os.path.join(config.CACHE, "thumbs")
+        local = self.downloaded(it)
+        if local:
+            bucket = int(t // 5) * 5
+
+            def grab():
+                import hashlib
+                import subprocess
+                key = hashlib.sha1(f"{local}|{bucket}".encode()).hexdigest()[:20]
+                out = os.path.join(cache, f"pv-{key}.jpg")
+                if not os.path.exists(out):
+                    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(bucket + 2), "-i", local, "-frames:v", "1",
+                                    "-vf", "scale=192:-2", "-q:v", "6", out], capture_output=True, timeout=10)
+                return (out, 0, 0, 0, 0) if os.path.exists(out) else None
+            self.bg(grab, then, lambda e: None)
+            return
+        if not it.get("yt"):
+            return
+        vid = it["yt"]
+        if vid not in self._boards:
+            self.details(lambda d: None)
+            return
+        cell = youtube.storyboard_cell(self._boards[vid], t)
+        if cell is None:
+            return
+        frag, x, y = cell
+        board = self._boards[vid]
+        path = os.path.join(cache, f"sb-{vid}-{frag}.jpg")
+        if os.path.exists(path):
+            then((path, x, y, board["w"], board["h"]))
+            return
+
+        def fetch():
+            import urllib.request
+            req = urllib.request.Request(board["frags"][frag]["url"], headers={"User-Agent": "drishya"})
+            with urllib.request.urlopen(req, timeout=15) as r, open(path + ".part", "wb") as f:
+                f.write(r.read())
+            os.replace(path + ".part", path)
+            return (path, x, y, board["w"], board["h"])
+        self.bg(fetch, then, lambda e: None)
+
     def draw(self, fbo, w, h):
         r = self.player.render if self.player else None
         if r is not None:
@@ -482,8 +560,10 @@ class Core:
 
     def _fill_in(self, vid):
         def then(r):
-            details, heights = r
+            details, heights, board = r
             self._qualities[vid] = heights
+            self._boards[vid] = board
+            self._details[vid] = details
             for it in self.queue:
                 if it.get("yt") == vid and it.get("pending"):
                     it.pop("pending", None)
@@ -709,7 +789,7 @@ class Core:
         if self.player is not None:
             s = max(0.25, min(4.0, round(s * 4) / 4 if s >= 0.25 else s))
             self.player.set("speed", f"{s:g}")
-            self.toast(f"Speed {s:g}×" + ("" if s == 1 else " · Backspace resets"))
+            self.toast(f"Speed {s:g}×" + ("" if s == 1 else " · \\ resets"))
 
     def cycle_subs(self):
         """Off, then each subtitle track, then off again."""

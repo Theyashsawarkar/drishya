@@ -2,6 +2,34 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
+## v0.2.0 -- 2026-10-24
+
+- **Video first.** The controls float over the video and fade after
+  2.5 s while it plays (a key or the mouse brings them back); the window's
+  bottom bar is gone on Watch. The title, channel and quality sit at the top.
+- **A timeline with chapters** as segments, what's buffered, and a preview
+  frame where you hover (YouTube's storyboards; ffmpeg for your files),
+  with the time and chapter name. Readable over any picture.
+- **Zen fullscreen** (`f`): just the video, no bar, no controls. Seeking or
+  changing the volume shows a small readout in the corner for a second;
+  `i` shows the title and time.
+- **Search from anywhere** (`/`): a floating panel for YouTube, your videos
+  (indexed in the background), your history, links and commands; results
+  as you type, the best match on top, `Tab` for where to look, `yt `,
+  `lib `, `h `, `:` to narrow, actions without leaving it. Paste a link
+  and the first row plays it. The YouTube tab is gone (its full results
+  open from the panel); tabs are now Watch · Up next · Library · History ·
+  Downloads (`0`–`4`). `o` opens the panel too.
+- **One settings menu** (`Q`): quality, speed, subtitles, audio track and
+  download, `j`/`k` to move, `l`/`Enter` in, `h` back.
+- **The side panel** has Up next, Chapters (jump with `Enter`) and Info
+  (link, views, date, description); `Tab` switches.
+- **The library is a grid**: Continue watching, then your folders and
+  videos with thumbnails, lengths and how much you've seen; `h j k l` move,
+  `Enter` opens or plays (with the rest of the folder after it),
+  `Backspace` goes up.
+- Speed reset moved from Backspace to `\` (Backspace means back, everywhere).
+
 ## v0.1.0 -- 2026-10-24
 
 - First release: a keyboard-driven video player, nāda's sibling for video.

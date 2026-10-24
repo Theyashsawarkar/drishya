@@ -8,19 +8,22 @@ import urllib.request
 from gi.repository import Gdk, GLib, Gtk
 
 from . import auth, config, library, youtube
-from .util import fmt_time
+from .util import fmt_time, track_name
+from .finder import Finder
+from .search import SearchPanel
 from .views import Downloads, History, Library, Queue, Watch, YouTube
 from .widgets import G, box, hint, keycap, label
 
+# keybind: Drishya/everywhere | / | Open the search panel (YouTube, your videos, history, links, : commands)
+# keybind: Drishya/everywhere | o | Open the search panel to paste a link or file path
 # keybind: Drishya/everywhere | Ctrl+Tab / Ctrl+Shift+Tab | Switch to the next / previous tab (wraps around)
-# keybind: Drishya/everywhere | Ctrl+0..5 | Switch to that numbered tab at once (the number shown on it)
+# keybind: Drishya/everywhere | Ctrl+0..4 | Switch to that numbered tab at once (the number shown on it)
 # keybind: Drishya/everywhere | 0 | Switch to Watch (the video)
 # keybind: Drishya/everywhere | 1 | Switch to Up next (the queue)
-# keybind: Drishya/everywhere | 2 | Switch to your video library
-# keybind: Drishya/everywhere | 3 | Switch to YouTube search
-# keybind: Drishya/everywhere | 4 | Switch to your history (continue watching)
-# keybind: Drishya/everywhere | 5 | Switch to downloads
-# keybind: Drishya/everywhere | j / k | Move down / up a video (counts work: 5j)
+# keybind: Drishya/everywhere | 2 | Switch to your video library (a grid)
+# keybind: Drishya/everywhere | 3 | Switch to your history (continue watching)
+# keybind: Drishya/everywhere | 4 | Switch to downloads
+# keybind: Drishya/everywhere | j / k | Move down / up (counts work: 5j)
 # keybind: Drishya/everywhere | gg / G | Jump to the top / bottom (12G: to the 12th)
 # keybind: Drishya/everywhere | Ctrl+d / Ctrl+u | Scroll half a page down / up
 # keybind: Drishya/everywhere | Space | Toggle play / pause
@@ -29,13 +32,14 @@ from .widgets import G, box, hint, keycap, label
 # keybind: Drishya/everywhere | > / < | Play the next / previous video
 # keybind: Drishya/everywhere | = / - | Raise / lower volume
 # keybind: Drishya/everywhere | m | Toggle mute
-# keybind: Drishya/everywhere | f | Toggle fullscreen (Esc leaves it too)
+# keybind: Drishya/everywhere | f | Toggle fullscreen (zen: just the video; Esc leaves it too)
 # keybind: Drishya/everywhere | t | Toggle theater mode (the video without the side panel)
 # keybind: Drishya/everywhere | z | Switch to the mini player (picture-in-picture)
+# keybind: Drishya/everywhere | Q | Open the settings menu (quality, speed, subtitles, audio, download)
 # keybind: Drishya/everywhere | c | Cycle subtitles (off, then each language)
 # keybind: Drishya/everywhere | # | Cycle the audio track
 # keybind: Drishya/everywhere | [ / ] | Slow down / speed up playback (0.25× steps)
-# keybind: Drishya/everywhere | Backspace | Reset playback speed to normal
+# keybind: Drishya/everywhere | \ | Reset playback speed to normal
 # keybind: Drishya/everywhere | { / } | Jump to the previous / next chapter
 # keybind: Drishya/everywhere | S | Start the video over from the beginning
 # keybind: Drishya/everywhere | M | Toggle autoplay (related videos or the next episode after yours)
@@ -43,57 +47,66 @@ from .widgets import G, box, hint, keycap, label
 # keybind: Drishya/everywhere | V | Select several videos (visual mode)
 # keybind: Drishya/everywhere | u | Restore the last queue change (undo)
 # keybind: Drishya/everywhere | Ctrl+r | Restore an undone queue change (redo)
-# keybind: Drishya/everywhere | / | Search (YouTube on 3, your files on 2, the list elsewhere)
-# keybind: Drishya/everywhere | n / N | Jump to the next / previous search match
-# keybind: Drishya/everywhere | o | Open a link or file (any server: HLS, a video file, a site yt-dlp knows)
-# keybind: Drishya/everywhere | Q | Pick the video quality (kept for the next videos and downloads)
-# keybind: Drishya/everywhere | : | Run a command (:yt query, :open path, :speed 1.5…)
-# keybind: Drishya/everywhere | i | Show the video's details and link
+# keybind: Drishya/everywhere | : | Run a command (:seek 1:30, :speed 1.5…)
+# keybind: Drishya/everywhere | i | Show the video's title and link (in fullscreen, briefly in the corner)
 # keybind: Drishya/everywhere | ? | Show all keys
 # keybind: Drishya/everywhere | q / Esc | Close the window (pauses; z keeps a mini player)
 # keybind: Drishya/watch | h / l | Seek back / forward 5 seconds (3l = 15 s)
-# keybind: Drishya/watch | j / k | Move through the up next list on the side
+# keybind: Drishya/watch | Tab | Switch the side panel (up next, chapters, info)
+# keybind: Drishya/watch | j / k | Move through the side panel's list (Enter plays it or jumps to the chapter)
 # keybind: Drishya/up next | dd | Remove the video from the queue (V: the selection)
 # keybind: Drishya/up next | yy | Copy the video (yank)
 # keybind: Drishya/up next | p / P | Paste removed or copied videos below / above
 # keybind: Drishya/up next | J / K | Move the video down / up
 # keybind: Drishya/up next | A | Move the video to play next
 # keybind: Drishya/up next | zz | Jump to the video that's playing
-# keybind: Drishya/library | h / l | Move between the folder columns (l opens a folder)
+# keybind: Drishya/library | h / j / k / l | Move through the grid
+# keybind: Drishya/library | Enter | Open the folder or play the video (the rest of the folder after it)
+# keybind: Drishya/library | Backspace / - | Go up a folder
 # keybind: Drishya/library | a / A | Add to the end of the queue / to play next
-# keybind: Drishya/library | R | Reload the folders (after a search too)
+# keybind: Drishya/library | R | Reload the folders
 # keybind: Drishya/youtube | a / A | Add the result to the end of the queue / to play next
 # keybind: Drishya/history | dd | Forget the video (removes it from the history)
 # keybind: Drishya/downloads | R | Retry a failed download
 # keybind: Drishya/downloads | x | Cancel a download in progress
 # keybind: Drishya/downloads | dd | Delete the saved file (asks first)
-# keybind: Drishya/quality | j / k | Move through the qualities
-# keybind: Drishya/quality | Enter | Play at the selected quality (and keep it)
-# keybind: Drishya/quality | Esc | Close the quality list
+# keybind: Drishya/search | Tab / Shift+Tab | Switch where to look (all, YouTube, your videos, history, commands)
+# keybind: Drishya/search | Ctrl+j / Ctrl+k | Move through the results while typing
+# keybind: Drishya/search | Enter | Play the result (a command: run it)
+# keybind: Drishya/search | Ctrl+Enter | Play the result next
+# keybind: Drishya/search | Shift+Enter | Add the result to Up next
+# keybind: Drishya/search | Ctrl+d | Download the result
+# keybind: Drishya/search | Ctrl+u | Clear the search box
+# keybind: Drishya/search | Ctrl+x | Clear recent searches
+# keybind: Drishya/search | Esc | Close the search panel
+# keybind: Drishya/settings | j / k | Move through the settings menu
+# keybind: Drishya/settings | l / Enter | Open the setting or choose it
+# keybind: Drishya/settings | h / Backspace | Go back in the settings menu
+# keybind: Drishya/settings | Esc | Close the settings menu
 # keybind: Drishya/sign in | Enter | Sign in and play (from the password field)
 # keybind: Drishya/sign in | Tab | Move between the username and password fields
 # keybind: Drishya/sign in | Ctrl+b | Sign in with your browser's login instead (sites yt-dlp plays)
 # keybind: Drishya/sign in | Ctrl+s | Toggle remembering the login in your keyring
 # keybind: Drishya/sign in | Esc | Cancel signing in
 
-TABS = ["watch", "queue", "library", "youtube", "history", "downloads"]
+TABS = ["watch", "queue", "library", "history", "downloads"]   # YouTube's results: a page, from the search panel
 KEYNAMES = {"space": " ", "period": ".", "comma": ",", "greater": ">", "less": "<", "equal": "=", "plus": "+",
             "minus": "-", "slash": "/", "colon": ":", "question": "?", "KP_Enter": "Return", "Up": "k", "Down": "j",
             "KP_Add": "+", "KP_Subtract": "-", "bracketleft": "[", "bracketright": "]", "braceleft": "{",
-            "braceright": "}", "numbersign": "#", "Left": "h", "Right": "l"}
+            "braceright": "}", "numbersign": "#", "Left": "h", "Right": "l", "backslash": "\\"}
 HELP = [
-    ("Move", [("j k", "down / up (5j counts)"), ("gg G", "top / bottom"), ("Ctrl+d Ctrl+u", "half a page"),
-              ("h l", "folders (library)"), ("zz", "the playing video"), ("0–5", "watch, up next, library…"),
-              ("Ctrl+Tab", "next tab")]),
+    ("Find & move", [("/", "search: YouTube, files, links"), ("j k", "down / up (5j)"), ("gg G", "top / bottom"),
+                     ("h j k l", "grid (library)"), ("0–4", "watch, up next, library…"), ("Ctrl+Tab", "next tab"),
+                     ("Esc", "back / close")]),
     ("Play", [("space", "play / pause"), ("Enter", "play the selected"), (". ,", "±10 s"), ("h l", "±5 s (watch)"),
               ("> <", "next / previous video"), ("= - m", "volume, mute"), ("S", "start over"),
               ("M", "autoplay on/off")]),
-    ("Video", [("f", "fullscreen"), ("t", "theater"), ("z", "mini player"), ("Q", "quality"), ("c", "subtitles"),
-               ("#", "audio track"),
-               ("[ ]", "slower / faster"), ("Backspace", "normal speed"), ("{ }", "chapters")]),
+    ("Video", [("f", "fullscreen (zen)"), ("t", "theater"), ("z", "mini player"), ("Q", "settings menu"),
+               ("c", "subtitles"), ("#", "audio track"), ("[ ] \\", "speed, normal"), ("{ }", "chapters"),
+               ("Tab", "side: next, chapters, info")]),
     ("Lists", [("dd", "remove"), ("J K", "move down / up"), ("yy p P", "copy, paste"), ("A", "play next"),
                ("a", "add"), ("V", "select several"), ("u Ctrl+r", "undo, redo"), ("D", "download"),
-               ("/ n N", "search"), ("o", "open a link or file"), (": ?", "commands, keys")]),
+               (": ?", "commands, keys")]),
 ]
 COMMANDS = ":yt <search> · :open <file, folder or link> · :add <…> · :seek 1:30 · :speed 1.5 · :vol 80 · " \
            ":sub off · :quality 720 (or Q) · :sleep 30m · :shot · :logout · :autoplay on/off · :clear · :dl · :q · :qa"
@@ -137,9 +150,11 @@ class Window(Gtk.ApplicationWindow):
         self.top.append(box(label(G["eye"], "glyph", ellipsize=False), label("drishya", ellipsize=False), spacing=7,
                             cls="logo", margin_end=8))
         self.views = {}
-        for i, cls in enumerate([Watch, Queue, Library, YouTube, History, Downloads]):
+        for i, cls in enumerate([Watch, Queue, Library, History, Downloads, YouTube]):
             v = cls(self)
             self.views[v.name] = v
+            if v.name not in TABS:
+                continue
             b = Gtk.Button()
             b.add_css_class("tab")
             b.set_child(box(keycap(str(i)), label(v.title, ellipsize=False), spacing=7))
@@ -179,9 +194,22 @@ class Window(Gtk.ApplicationWindow):
         self.help = self._help()
         self.help.set_visible(False)
         overlay.add_overlay(self.help)
-        self.qpanel = self._quality_panel()
-        self.qpanel.set_visible(False)
-        overlay.add_overlay(self.qpanel)
+        self.menu = self._settings_menu()
+        self.menu.set_visible(False)
+        overlay.add_overlay(self.menu)
+        # the search panel (/), over a dimmed window
+        self.finder = Finder(self)
+        self.scrim = Gtk.Box(hexpand=True, vexpand=True, visible=False, css_classes=["scrim"])
+        g = Gtk.GestureClick()
+        g.connect("pressed", lambda *_: self.close_search())
+        self.scrim.add_controller(g)
+        overlay.add_overlay(self.scrim)
+        self.search = SearchPanel(self, self.finder, config.STATE,
+                                  "Search YouTube and your videos, or paste a link…")
+        self.search.set_margin_top(64)
+        self.search.set_visible(False)
+        overlay.add_overlay(self.search)
+        GLib.timeout_add_seconds(2, lambda: (self.finder.refresh_index(), False)[1])
         self.login = self._login_panel()
         self.login.set_visible(False)
         overlay.add_overlay(self.login)
@@ -230,7 +258,7 @@ class Window(Gtk.ApplicationWindow):
         self.progress.set_focusable(False)
         self.progress.connect("change-value", lambda _s, _t, v: (c.seek_to(v), False)[1])
         self.cc = self._btn("CC", "Subtitles  (c)", c.cycle_subs)
-        self.qbtn = self._btn("", "Quality  (Q)", self.open_quality)
+        self.qbtn = self._btn("", "Settings: quality, speed, subtitles  (Q)", self.open_settings)
         self.qbtn.add_css_class("qbtn")
         self.dlbtn = self._btn(G["dl"], "Download this video  (D)", lambda: c.current and c.download(c.current))
         openbtn = self._btn(G["folder"], "Open a link or file  (o)", self.open_link)
@@ -265,95 +293,166 @@ class Window(Gtk.ApplicationWindow):
         return box(grid, cmds, label("? or Esc closes this", "dim", margin_top=10), vertical=True, cls="help",
                    valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
 
-    # ------------------------------------------------------------ quality
-    def _quality_panel(self):
-        self.q_title = label("Quality", "signin-title")
-        self.q_note = label("", "signin-why", wrap=True, max_width_chars=48)
-        self.q_list = box(vertical=True, spacing=2)
-        self.q_items, self.q_sel, self.q_kind = [], 0, "none"
-        return box(box(label(G["speed"], "glyph signin-glyph", ellipsize=False), self.q_title, spacing=10),
-                   self.q_note, self.q_list,
-                   box(hint("j k", "move"), hint("Enter", "play at it"), hint("Esc", "close"), spacing=14),
-                   vertical=True, spacing=10, cls="signin qpanel", valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
+    # ------------------------------------------------------------ settings menu (Q)
+    def _settings_menu(self):
+        self.menu_title = label("Settings", "menu-title")
+        self.menu_list = box(vertical=True, spacing=2)
+        self.menu_note = label("", "dim menu-note", wrap=True, max_width_chars=34)
+        self.menu_page, self.menu_items, self.menu_sel = "root", [], 0
+        foot = box(hint("j k", "move"), hint("l Enter", "choose"), hint("h", "back"), hint("Esc", "close"), spacing=12,
+                   cls="menu-foot")
+        return box(self.menu_title, self.menu_note, self.menu_list, foot, vertical=True, spacing=6, cls="menu",
+                   valign=Gtk.Align.END, halign=Gtk.Align.END, margin_end=24, margin_bottom=96)
 
-    def open_quality(self):
-        c = self.core
-        if c.current is None:
-            self.toast("Nothing playing · the quality you pick applies from the next video: :quality 720")
+    def open_settings(self):
+        if self.core.current is None:
+            self.toast("Nothing playing · :quality 720 sets the quality for what plays next")
             return
-        if self.fullscreened:
-            self.unfullscreen()
-        self.q_note.set_text("Asking YouTube which qualities it has…")
-        self._q_fill("loading", [])
-        self.qpanel.set_visible(True)
-        self.set_mode("QUALITY")
-        c.qualities(lambda kind, hs: self.qpanel.get_visible() and self._q_fill(kind, hs))
+        self.menu.set_visible(True)
+        self.set_mode("SETTINGS")
+        self._menu_root()
 
-    def _q_fill(self, kind, heights):
+    def _menu_root(self, sel=0):
         c = self.core
-        self.q_kind = kind
-        child = self.q_list.get_first_child()
+        h = c.current_height()
+        sub = next((t for t in c.tracks if t.get("type") == "sub" and t.get("selected")), None)
+        aud = [t for t in c.tracks if t.get("type") == "audio"]
+        cur_aud = next((t for t in aud if t.get("selected")), None)
+        items = [("Quality", f"{h}p · up to {c.quality}p" if h else f"up to {c.quality}p", self._menu_quality),
+                 ("Speed", f"{c.speed:g}×", self._menu_speed),
+                 ("Subtitles", track_name(sub) if sub else ("off" if any(t.get("type") == "sub" for t in c.tracks) else "none"),
+                  self._menu_subs)]
+        if len(aud) > 1:
+            items.append(("Audio", track_name(cur_aud) if cur_aud else "", self._menu_audio))
+        if c.current and (c.current.get("yt") or c.current.get("url")) and not c.current.get("live") \
+                and not c.downloaded(c.current):
+            items.append((f"Download at {c.quality}p", "D", lambda: (self._menu_close(), c.download(c.current))))
+        self._menu_show("root", "Settings", "", items, sel)
+
+    def _menu_show(self, page, title, note, items, sel=0):
+        """items: [(name, value, action)]: action() opens a page or does it."""
+        self.menu_page, self.menu_items = page, items
+        self.menu_title.set_text(title)
+        self.menu_note.set_text(note)
+        self.menu_note.set_visible(bool(note))
+        child = self.menu_list.get_first_child()
         while child:
             nxt = child.get_next_sibling()
-            self.q_list.remove(child)
+            self.menu_list.remove(child)
             child = nxt
-        now = c.current_height()
-        notes = {"youtube": "YouTube: switching reopens the video at the same second. "
-                            "Your pick stays for the next videos and for downloads (D).",
-                 "stream": "This stream's qualities: switching is instant. Your pick stays for the next videos.",
-                 "file": "A file on your disk plays at its own quality. Your pick applies to YouTube, streams and downloads.",
-                 "loading": "Asking YouTube which qualities it has…", "none": ""}
-        self.q_note.set_text(notes.get(kind, ""))
-        self.q_items = [] if kind in ("file", "loading") else list(heights)
-        if kind == "file":
-            self.q_list.append(label(f"{now}p · this file" if now else "This file", "q-row on"))
-        for h in self.q_items:
-            tags = []
-            if h == now:
-                tags.append("playing")
-            if h == c.quality:
-                tags.append("your pick")
-            name = {4320: "8K", 2160: "4K", 1440: "1440p (2K)"}.get(h, f"{h}p")
-            if h >= 720 and h not in (1440, 2160, 4320):
-                name += " HD"
-            row = box(label(name, "q-name", hexpand=True), label(" · ".join(tags), "dim", ellipsize=False),
-                      spacing=12, cls="q-row")
-            self.q_list.append(row)
-        # start on what's playing (else your pick, else the best)
-        self.q_sel = next((i for i, h in enumerate(self.q_items) if h == now),
-                          next((i for i, h in enumerate(self.q_items) if h <= c.quality), 0))
-        self._q_paint()
+        for i, (name, value, _act) in enumerate(items):
+            row = box(label(name, "menu-name", hexpand=True), label(value, "menu-value", ellipsize=False),
+                      label("›" if page == "root" and not name.startswith("Download") else "", "menu-more", ellipsize=False),
+                      spacing=10, cls="menu-row")
+            g = Gtk.GestureClick()
+            g.connect("pressed", lambda *_a, i=i: (setattr(self, "menu_sel", i), self._menu_choose()))
+            row.add_controller(g)
+            self.menu_list.append(row)
+        self.menu_sel = max(0, min(sel, len(items) - 1))
+        self._menu_paint()
 
-    def _q_paint(self):
-        i, child = 0, self.q_list.get_first_child()
+    def _menu_paint(self):
+        i, child = 0, self.menu_list.get_first_child()
         while child:
-            if self.q_kind not in ("file", "loading"):
-                (child.add_css_class if i == self.q_sel else child.remove_css_class)("sel")
+            (child.add_css_class if i == self.menu_sel else child.remove_css_class)("sel")
             i += 1
             child = child.get_next_sibling()
 
-    def _q_close(self):
-        self.qpanel.set_visible(False)
+    def _menu_choose(self):
+        if 0 <= self.menu_sel < len(self.menu_items):
+            self.menu_items[self.menu_sel][2]()
+
+    def _menu_close(self):
+        self.menu.set_visible(False)
         self.root.grab_focus()
         self.set_mode("NORMAL")
 
-    def _q_key(self, name):
-        if name in ("Escape", "q", "Q"):
-            self._q_close()
-        elif name in ("j", "Down") and self.q_items:
-            self.q_sel = min(len(self.q_items) - 1, self.q_sel + 1)
-            self._q_paint()
-        elif name in ("k", "Up") and self.q_items:
-            self.q_sel = max(0, self.q_sel - 1)
-            self._q_paint()
-        elif name in ("Return", "KP_Enter", "l"):
-            if self.q_items:
-                h = self.q_items[self.q_sel]
-                self._q_close()
-                self.core.set_quality(h)
+    def _menu_back(self):
+        if self.menu_page == "root":
+            self._menu_close()
+        else:
+            self._menu_root(["quality", "speed", "subs", "audio"].index(self.menu_page)
+                            if self.menu_page in ("quality", "speed", "subs", "audio") else 0)
+
+    def _menu_quality(self):
+        c = self.core
+        self._menu_show("quality", "Quality", "Asking YouTube which qualities it has…", [])
+
+        def got(kind, heights):
+            if not self.menu.get_visible() or self.menu_page != "quality":
+                return
+            now = c.current_height()
+            notes = {"youtube": "Reopens the video at the same second. Kept for the next videos and downloads.",
+                     "stream": "This stream's qualities: switching is instant.",
+                     "file": "A file plays at its own quality. Your pick is for YouTube, streams and downloads."}
+            if kind in ("file", "none") or not heights:
+                self._menu_show("quality", "Quality", notes.get(kind, ""),
+                                [(f"{now}p" if now else "This file", "playing", self._menu_back)])
+                return
+            items = []
+            for h in heights:
+                name = {4320: "8K", 2160: "4K", 1440: "1440p"}.get(h, f"{h}p" + (" HD" if h >= 720 else ""))
+                tags = " · ".join(t for t in ("playing" if h == now else "", "your pick" if h == c.quality else "") if t)
+                items.append((name, tags, lambda h=h: (self._menu_close(), c.set_quality(h))))
+            sel = next((i for i, h in enumerate(heights) if h == now), next((i for i, h in enumerate(heights)
+                                                                            if h <= c.quality), 0))
+            self._menu_show("quality", "Quality", notes.get(kind, ""), items, sel)
+        c.qualities(got)
+
+    def _menu_speed(self):
+        c = self.core
+        speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+        items = [(f"{s:g}×" + (" normal" if s == 1 else ""), "playing" if abs(c.speed - s) < 0.01 else "",
+                  lambda s=s: (self._menu_close(), c.set_speed(s))) for s in speeds]
+        self._menu_show("speed", "Speed", "[ and ] change it from anywhere; \\ resets", items,
+                        min(range(len(speeds)), key=lambda i: abs(speeds[i] - c.speed)))
+
+    def _menu_subs(self):
+        c = self.core
+        subs = [t for t in c.tracks if t.get("type") == "sub"]
+        cur = next((t for t in subs if t.get("selected")), None)
+
+        def pick(t):
+            self._menu_close()
+            if t is None:
+                c.player.set("sid", "no")
+                self.toast("Subtitles off")
             else:
-                self._q_close()
+                c.player.set("sid", str(t["id"]))
+                c.player.set("sub-visibility", True)
+                self.toast(f"Subtitles: {track_name(t)}")
+        items = [("Off", "" if cur else "playing", lambda: pick(None))]
+        items += [(track_name(t), "playing" if t is cur else "", lambda t=t: pick(t)) for t in subs]
+        self._menu_show("subs", "Subtitles", "" if subs else "This video has no subtitles in your languages "
+                                                            "(subtitles in config.toml)", items,
+                        (subs.index(cur) + 1) if cur in subs else 0)
+
+    def _menu_audio(self):
+        c = self.core
+        auds = [t for t in c.tracks if t.get("type") == "audio"]
+
+        def pick(t):
+            self._menu_close()
+            c.player.set("aid", str(t["id"]))
+            self.toast(f"Audio: {track_name(t)}")
+        items = [(track_name(t), "playing" if t.get("selected") else "", lambda t=t: pick(t)) for t in auds]
+        self._menu_show("audio", "Audio track", "", items, next((i for i, t in enumerate(auds) if t.get("selected")), 0))
+
+    def _menu_key(self, name):
+        if name in ("Escape", "Q", "q"):
+            self._menu_close()
+        elif name in ("j", "Down"):
+            self.menu_sel = min(len(self.menu_items) - 1, self.menu_sel + 1)
+            self._menu_paint()
+        elif name in ("k", "Up"):
+            self.menu_sel = max(0, self.menu_sel - 1)
+            self._menu_paint()
+        elif name in ("l", "Return", "KP_Enter", "Right"):
+            self._menu_choose()
+        elif name in ("h", "BackSpace", "Left"):
+            self._menu_back()
         return True
+
 
     def open_link(self):
         if self.fullscreened:
@@ -435,6 +534,10 @@ class Window(Gtk.ApplicationWindow):
             self.unfullscreen()
         self.tab = name
         self.stack.set_visible_child_name(name)
+        # On Watch the controls are over the video; elsewhere, the bar below
+        self.bar.set_visible(name != "watch" and not self.fullscreened)
+        if name == "watch":
+            self.views["watch"].poke()
         for n, b in self.tabbtn.items():
             (b.add_css_class if n == name else b.remove_css_class)("on")
         self.views[name].shown()
@@ -454,13 +557,12 @@ class Window(Gtk.ApplicationWindow):
     def _fullscreen_changed(self):
         self.fullscreened = bool(self.is_fullscreen())
         on = self.fullscreened
-        for w in (self.top, self.bar, self.status):
+        for w in (self.top, self.status):
             w.set_visible(not on)
-        self.views["watch"].set_theater(on or self.theater)
+        self.bar.set_visible(not on and self.tab != "watch")
         (self.root.add_css_class if on else self.root.remove_css_class)("full")
         self.fullbtn.get_child().set_text(G["unfull"] if on else G["full"])
-        if on:
-            self.views["watch"].show_osd()
+        self.views["watch"].enter_zen(on)   # fullscreen is zen: the video, nothing over it
 
     def toggle_theater(self):
         self.theater = not self.theater
@@ -472,7 +574,7 @@ class Window(Gtk.ApplicationWindow):
     def set_mode(self, mode):
         self.mode = mode
         self.modelab.set_text(mode)
-        for m in ("visual", "search", "command", "confirm", "login", "quality"):
+        for m in ("visual", "search", "command", "confirm", "login", "settings"):
             (self.modelab.add_css_class if mode.lower() == m else self.modelab.remove_css_class)(m)
 
     def _hints(self):
@@ -491,9 +593,7 @@ class Window(Gtk.ApplicationWindow):
         if not text:
             return
         if self.fullscreened:
-            self.views["watch"].osd_title.set_text(text)
-            self.views["watch"].show_osd()
-            GLib.timeout_add(2600, lambda: (self.views["watch"].refresh("video"), False)[1])
+            self.views["watch"].zen_note(text, 2.2)   # zen: a small line in the corner
             return
         self.toast_lab.set_text(text)
         self.toast_rev.set_reveal_child(True)
@@ -501,12 +601,33 @@ class Window(Gtk.ApplicationWindow):
             GLib.source_remove(self.toast_timer)
         self.toast_timer = GLib.timeout_add(2600, self._toast_hide)
 
-    def osd_or_toast(self, text):
-        """Seeking: the OSD's progress bar says it on the Watch tab."""
+    def feedback(self, text):
+        """After a seek or a volume change: on Watch the controls show it
+        (in zen, a small readout); elsewhere a toast."""
         if self.tab == "watch":
-            self.views["watch"].show_osd(1.6)
+            w = self.views["watch"]
+            if self.fullscreened:
+                c = self.core
+                w.zen_note(f"{text}   {fmt_time(c.pos)} / {fmt_time(c.duration)}" if c.duration else text)
+            else:
+                w.poke()
         else:
             self.toast(text)
+
+    # ------------------------------------------------------------ search panel (/)
+    def open_search(self, text="", scope=0):
+        if self.menu.get_visible():
+            self._menu_close()
+        self.finder.refresh_index()
+        self.scrim.set_visible(True)
+        self.search.open(text, scope)
+        self.set_mode("SEARCH")
+
+    def close_search(self):
+        self.search.close()
+        self.scrim.set_visible(False)
+        self.root.grab_focus()
+        self.set_mode("NORMAL")
 
     def _toast_hide(self):
         self.toast_rev.set_reveal_child(False)
@@ -611,6 +732,7 @@ class Window(Gtk.ApplicationWindow):
     def _thumbs_ready(self):
         self.thumb_timer = None
         self.core.emit("thumbs")
+        self.search.refresh_thumbs()
         return False
 
     # ------------------------------------------------------------ visibility
@@ -639,11 +761,13 @@ class Window(Gtk.ApplicationWindow):
             i = TABS.index(self.tab) if self.tab in TABS else 0
             self.switch(TABS[(i + (-1 if back else 1)) % len(TABS)])
             return True
-        if ctrl_on and re.fullmatch(r"[0-5]", name):
+        if ctrl_on and re.fullmatch(r"[0-4]", name):
             self.switch(TABS[int(name)])
             return True
-        if self.qpanel.get_visible():
-            return self._q_key(name)
+        if self.search.get_visible():
+            return self.search.key(name, state)
+        if self.menu.get_visible():
+            return self._menu_key(name)
         if self.login.get_visible():
             if name == "Escape":
                 self._login_close()
@@ -688,8 +812,8 @@ class Window(Gtk.ApplicationWindow):
         k = KEYNAMES.get(name, name)
         if ctrl_on:
             k = "C-" + k.lower()
-        if self.fullscreened:
-            self.views["watch"].show_osd()
+        if self.tab == "watch" and not self.fullscreened:
+            self.views["watch"].poke()   # a key shows the controls (zen shows nothing)
         if re.fullmatch(r"[0-9]", k) and not self.pending:
             if k == "0" and not self.count:
                 self.switch("watch")
@@ -698,7 +822,7 @@ class Window(Gtk.ApplicationWindow):
             self._show_pending()
             if self.digit_timer:
                 GLib.source_remove(self.digit_timer)
-            if re.fullmatch(r"[1-5]", self.count):
+            if re.fullmatch(r"[1-4]", self.count):
                 self.digit_timer = GLib.timeout_add(650, self._digit_tab, self.count)
             return True
         if self.digit_timer:
@@ -791,20 +915,20 @@ class Window(Gtk.ApplicationWindow):
             c.toggle()
         elif k == ".":
             c.seek(step * n)
-            self.osd_or_toast(f"Forward {step * n} s · {fmt_time(c.pos + step * n)}")
+            self.feedback(f"{G['fwd']} {step * n} s")
         elif k == ",":
             c.seek(-step * n)
-            self.osd_or_toast(f"Back {step * n} s · {fmt_time(max(0, c.pos - step * n))}")
+            self.feedback(f"{G['back']} {step * n} s")
         elif k == ">":
             c.next(n)
         elif k == "<":
             c.prev(n)
         elif k in ("=", "+"):
             c.change_volume(c.conf["volume_step"] * n)
-            self.toast(f"Volume {c.volume:.0f}")
+            self.feedback(f"{G['vol']} {c.volume:.0f}")
         elif k == "-":
             c.change_volume(-c.conf["volume_step"] * n)
-            self.toast(f"Volume {c.volume:.0f}")
+            self.feedback(f"{G['vol']} {c.volume:.0f}")
         elif k == "m":
             c.mute()
         elif k == "f":
@@ -819,7 +943,7 @@ class Window(Gtk.ApplicationWindow):
             c.set_speed(c.speed + 0.25 * n)
         elif k == "[":
             c.set_speed(c.speed - 0.25 * n)
-        elif k == "BackSpace":
+        elif k == "\\":
             c.set_speed(1.0)
         elif k == "}":
             c.chapter_step(n)
@@ -838,14 +962,13 @@ class Window(Gtk.ApplicationWindow):
                 c.download(c.current)
         elif k == "i":
             cur = c.current
-            if cur:
+            if cur and self.fullscreened:
+                self.views["watch"].zen_note(f"{cur['title']}   {fmt_time(c.pos)} / {fmt_time(c.duration)}", 3)
+            elif cur:
                 where = youtube.watch_url(cur["yt"]) if cur.get("yt") else cur.get("url") or cur.get("file")
                 self.toast(f"{cur['title']} · {cur.get('channel', '')} · {where}")
         elif k == "/":
-            if self.tab == "youtube":
-                self.views["youtube"].focus_entry()
-            else:
-                self._cmd_open("/")
+            self.open_search()
         elif k in ("n", "N"):
             v = self.views[self.tab]
             if hasattr(v, "next_match"):
@@ -853,9 +976,10 @@ class Window(Gtk.ApplicationWindow):
         elif k == ":":
             self._cmd_open(":")
         elif k == "o":
-            self.open_link()
+            self.open_search()
+            self.toast("Paste a link (YouTube, HLS, any video URL) or type a file path")
         elif k == "Q":
-            self.open_quality()
+            self.open_settings()
         elif k == "?":
             self.help.set_visible(True)
         elif k == "Escape":

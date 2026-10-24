@@ -42,12 +42,17 @@
 
 ## Features
 
-- **The video in the window**: mpv's renderer draws into the app (libmpv),
-  with hardware decoding. `f` for fullscreen, `t` for theater mode, `z`
-  for a mini player in the corner while you work.
-- **YouTube without an account**: search on tab `3`, every result with
-  its thumbnail, channel, views and length. What plays after it is what
-  YouTube would play (autoplay, `M` turns it off).
+- **Video first**: mpv draws into the window (libmpv, hardware decoding).
+  The controls float over the video and fade after a moment; the timeline
+  shows the chapters, what's buffered, and a preview frame where you hover.
+  `f` is fullscreen as **zen**: just the video, and a small readout in the
+  corner when you seek or press `i`. `t` theater, `z` a mini player.
+- **Search from anywhere** (`/`): one floating panel for YouTube, your
+  videos, your history, a link you paste and commands. Your own videos
+  answer as you type, YouTube a moment later, the best match first; `Tab`
+  picks where to look. Play, play next, add or download without leaving it.
+- **YouTube without an account**: every result with its thumbnail, channel,
+  views and length; related videos play after yours (autoplay, `M`).
 - **Any link**: `o` and paste. HLS (`.m3u8`) and DASH streams from any
   server, a video file over HTTP, live streams, and the [sites yt-dlp
   plays](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
@@ -55,14 +60,15 @@
 - **Signs in when it has to**: a server that asks for a username and
   password gets a sign-in panel; sites that need an account can borrow
   your browser's login. Logins you choose to remember go to your keyring.
-- **Your library**: your video folders in columns (like yazi), episodes
-  in order (`S01E02`, "Episode 10" after "Episode 9"), thumbnails, and the
+- **Your library as a grid**: Continue watching first, then your folders;
+  inside, the episodes in order (`S01E02`, "Episode 10" after "Episode 9"), thumbnails, and the
   next episode lined up after the one you play.
 - **Resume and history**: every video starts where you stopped. History
   (`4`) has a *Continue watching* list, with a red bar for how much you've seen.
 - **Up next, edited like text**: `dd` removes, `J`/`K` move, `yy`/`p` copy
   and paste, `V` selects several, `u` undoes, `Ctrl+r` redoes.
-- **Pick the quality** (`Q`, or the `1080p` button): what YouTube offers
+- **One settings menu** (`Q`): quality, speed, subtitles, audio track,
+  download. Quality lists what YouTube offers
   for this video (4K down to 144p) or a stream's own qualities. Your pick
   stays for the next videos and for downloads.
 - **Downloads with subtitles**: `D` (or the download button) saves a video
@@ -78,8 +84,12 @@
   panels; Catppuccin Mocha without.
 
 <p align="center">
-  <img alt="Up next: what you watched dimmed with a red progress bar, the playing video, then yours, with a HLS stream, files and a saved YouTube video" src="assets/screenshots/queue.png" width="49%">
-  <img alt="The library: folders on the left, a show's episodes in order with thumbnails and lengths" src="assets/screenshots/library.png" width="49%">
+  <img alt="The search panel: the top result from YouTube with its thumbnail, more results, and the keys" src="assets/screenshots/search.png" width="49%">
+  <img alt="The settings menu over the video: quality, speed, subtitles" src="assets/screenshots/settings.png" width="49%">
+</p>
+<p align="center">
+  <img alt="The library as a grid: folders and videos with thumbnails and lengths" src="assets/screenshots/library.png" width="49%">
+  <img alt="Watch with the Info side panel: the video's link, views, date and description" src="assets/screenshots/info.png" width="49%">
 </p>
 
 ## Install
@@ -149,26 +159,30 @@ drishya status [--json]     what's playing
 drishya quit                stop it
 ```
 
-Tabs: `0` Watch, `1` Up next, `2` Library, `3` YouTube, `4` History,
-`5` Downloads. Lists move with `j`/`k`; `Enter` plays. `?` shows every key.
+Tabs: `0` Watch, `1` Up next, `2` Library, `3` History, `4` Downloads;
+`/` searches YouTube, your videos and history from any of them. Lists move with `j`/`k`; `Enter` plays. `?` shows every key.
 
 ## Keys
 
-Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
+The footer always shows the keys for where you are; `?` shows them all.
+The same rules everywhere: `/` searches, `Esc` goes back or closes, `j`/`k` move, `h`/`l` go back and in
+(menus, the grid), `Enter` does the main thing, `Tab` switches section; while typing, `Ctrl+j`/`Ctrl+k` move.
+Counts work like vim: `5j`, `3.`.
 
 **Everywhere**
 
 | Key | Action |
 |---|---|
+| `/` | Open the search panel (YouTube, your videos, history, links, : commands) |
+| `o` | Open the search panel to paste a link or file path |
 | `Ctrl+Tab / Ctrl+Shift+Tab` | Switch to the next / previous tab (wraps around) |
-| `Ctrl+0..5` | Switch to that numbered tab at once (the number shown on it) |
+| `Ctrl+0..4` | Switch to that numbered tab at once (the number shown on it) |
 | `0` | Switch to Watch (the video) |
 | `1` | Switch to Up next (the queue) |
-| `2` | Switch to your video library |
-| `3` | Switch to YouTube search |
-| `4` | Switch to your history (continue watching) |
-| `5` | Switch to downloads |
-| `j / k` | Move down / up a video (counts work: 5j) |
+| `2` | Switch to your video library (a grid) |
+| `3` | Switch to your history (continue watching) |
+| `4` | Switch to downloads |
+| `j / k` | Move down / up (counts work: 5j) |
 | `gg / G` | Jump to the top / bottom (12G: to the 12th) |
 | `Ctrl+d / Ctrl+u` | Scroll half a page down / up |
 | `Space` | Toggle play / pause |
@@ -177,13 +191,14 @@ Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
 | `> / <` | Play the next / previous video |
 | `= / -` | Raise / lower volume |
 | `m` | Toggle mute |
-| `f` | Toggle fullscreen (Esc leaves it too) |
+| `f` | Toggle fullscreen (zen: just the video; Esc leaves it too) |
 | `t` | Toggle theater mode (the video without the side panel) |
 | `z` | Switch to the mini player (picture-in-picture) |
+| `Q` | Open the settings menu (quality, speed, subtitles, audio, download) |
 | `c` | Cycle subtitles (off, then each language) |
 | `#` | Cycle the audio track |
 | `[ / ]` | Slow down / speed up playback (0.25× steps) |
-| `Backspace` | Reset playback speed to normal |
+| `\` | Reset playback speed to normal |
 | `{ / }` | Jump to the previous / next chapter |
 | `S` | Start the video over from the beginning |
 | `M` | Toggle autoplay (related videos or the next episode after yours) |
@@ -191,23 +206,20 @@ Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
 | `V` | Select several videos (visual mode) |
 | `u` | Restore the last queue change (undo) |
 | `Ctrl+r` | Restore an undone queue change (redo) |
-| `/` | Search (YouTube on 3, your files on 2, the list elsewhere) |
-| `n / N` | Jump to the next / previous search match |
-| `o` | Open a link or file (any server: HLS, a video file, a site yt-dlp knows) |
-| `Q` | Pick the video quality (kept for the next videos and downloads) |
-| `:` | Run a command (:yt query, :open path, :speed 1.5…) |
-| `i` | Show the video's details and link |
+| `:` | Run a command (:seek 1:30, :speed 1.5…) |
+| `i` | Show the video's title and link (in fullscreen, briefly in the corner) |
 | `?` | Show all keys |
 | `q / Esc` | Close the window (pauses; z keeps a mini player) |
 
-**On Watch (the video)**
+**On Watch (`0`)**
 
 | Key | Action |
 |---|---|
 | `h / l` | Seek back / forward 5 seconds (3l = 15 s) |
-| `j / k` | Move through the up next list on the side |
+| `Tab` | Switch the side panel (up next, chapters, info) |
+| `j / k` | Move through the side panel's list (Enter plays it or jumps to the chapter) |
 
-**On Up next (the queue)**
+**On Up next (`1`)**
 
 | Key | Action |
 |---|---|
@@ -218,27 +230,29 @@ Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
 | `A` | Move the video to play next |
 | `zz` | Jump to the video that's playing |
 
-**In the library**
+**In the library (`2`)**
 
 | Key | Action |
 |---|---|
-| `h / l` | Move between the folder columns (l opens a folder) |
+| `h / j / k / l` | Move through the grid |
+| `Enter` | Open the folder or play the video (the rest of the folder after it) |
+| `Backspace / -` | Go up a folder |
 | `a / A` | Add to the end of the queue / to play next |
-| `R` | Reload the folders (after a search too) |
+| `R` | Reload the folders |
 
-**In YouTube results**
+**In YouTube results (from `/`)**
 
 | Key | Action |
 |---|---|
 | `a / A` | Add the result to the end of the queue / to play next |
 
-**In the history**
+**In the history (`3`)**
 
 | Key | Action |
 |---|---|
 | `dd` | Forget the video (removes it from the history) |
 
-**In downloads**
+**In downloads (`4`)**
 
 | Key | Action |
 |---|---|
@@ -246,13 +260,28 @@ Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
 | `x` | Cancel a download in progress |
 | `dd` | Delete the saved file (asks first) |
 
-**In the quality list**
+**In the search panel (`/`)**
 
 | Key | Action |
 |---|---|
-| `j / k` | Move through the qualities |
-| `Enter` | Play at the selected quality (and keep it) |
-| `Esc` | Close the quality list |
+| `Tab / Shift+Tab` | Switch where to look (all, YouTube, your videos, history, commands) |
+| `Ctrl+j / Ctrl+k` | Move through the results while typing |
+| `Enter` | Play the result (a command: run it) |
+| `Ctrl+Enter` | Play the result next |
+| `Shift+Enter` | Add the result to Up next |
+| `Ctrl+d` | Download the result |
+| `Ctrl+u` | Clear the search box |
+| `Ctrl+x` | Clear recent searches |
+| `Esc` | Close the search panel |
+
+**In the settings menu (`Q`)**
+
+| Key | Action |
+|---|---|
+| `j / k` | Move through the settings menu |
+| `l / Enter` | Open the setting or choose it |
+| `h / Backspace` | Go back in the settings menu |
+| `Esc` | Close the settings menu |
 
 **In the sign-in panel**
 
@@ -264,7 +293,7 @@ Vim-style, one or two keys each; counts work (`5j`, `3.` skips 30 s).
 | `Ctrl+s` | Toggle remembering the login in your keyring |
 | `Esc` | Cancel signing in |
 
-**In the mini player**
+**In the mini player (`z`)**
 
 | Key | Action |
 |---|---|
