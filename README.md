@@ -6,6 +6,15 @@
   </picture>
 </p>
 
+<!-- identity -->
+<p align="center">
+  <b>रूपं दृश्यं लोचनं दृक् तद्दृश्यं दृक्तु मानसम् ।<br>
+  दृश्या धीवृत्तयः साक्षी दृगेव न तु दृश्यते ॥</b><br>
+  <i>Form is what is seen and the eye the seer; the eye is seen by the mind, and the mind's movements by the witness, who is never seen.</i><br>
+  <sub>Dṛg-Dṛśya-Viveka 1</sub>
+</p>
+<!-- /identity -->
+
 <p align="center">
   <b>A keyboard-driven video player for YouTube, your files and any stream.</b><br>
   Vim keys, resume where you stopped, history, autoplay, downloads with subtitles, HLS and logins. One window, in your desktop's look.
