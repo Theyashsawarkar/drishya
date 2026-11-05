@@ -129,8 +129,8 @@ text.cmdline, .cmdline { font-family: "JetBrainsMono Nerd Font", monospace; font
 /* ---- videos ---- */
 .thumb { border-radius: 10px; background: alpha(white, 0.05); }
 .thumb-glyph { font-size: 26px; color: alpha(white, 0.2); }
-progressbar.watched trough { min-height: 3px; background: alpha(white, 0.25); border-radius: 0; }
-progressbar.watched progress { min-height: 3px; background: @red; border-radius: 0; }
+progressbar.watched trough { min-height: 3px; background: alpha(white, 0.25); border-radius: 3px; }
+progressbar.watched progress { min-height: 3px; background: @red; border-radius: 3px; }
 .row .title { font-size: 13.5px; }
 .empty .glyph.big { font-size: 40px; color: @ov0; }
 .folder-row { padding: 8px 10px; }
@@ -139,7 +139,7 @@ progressbar.watched progress { min-height: 3px; background: @red; border-radius:
 
 /* ---- watch: the stage and the side ---- */
 .stage { background: black; }
-.drishya-root:not(.full) .stage { border-radius: 0 0 0 0; }
+.drishya-root:not(.full) .stage { border-radius: 14px; }
 .center-glyph { font-size: 64px; color: alpha(white, 0.85); background: alpha(black, 0.45); border-radius: 99px;
   padding: 18px 26px; }
 .osd { padding: 14px 22px 18px; background-image: linear-gradient(to top, alpha(black, 0.75), alpha(black, 0)); }
