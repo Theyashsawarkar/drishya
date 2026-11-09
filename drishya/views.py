@@ -122,7 +122,7 @@ class Watch(View):
     timeline with chapters and preview frames, and on the side what's next,
     the chapters and the details. Fullscreen is zen: just the video."""
     name, title, glyph = "watch", "Watch", G["watch"]
-    hints = [("space", "play"), ("h l", "±5 s"), ("Q", "settings"), ("Tab", "side"), ("f", "fullscreen")]
+    hints = [("p", "play"), ("h l", "±5 s"), ("Q", "settings"), ("Tab", "side"), ("f", "fullscreen"), ("Space", "more")]
     SIDES = ["next", "chapters", "info"]
 
     def __init__(self, win):
@@ -132,7 +132,7 @@ class Watch(View):
         self.over = Gtk.Overlay(hexpand=True, vexpand=True)
         self.over.add_css_class("stage")
         self.over.set_child(self.area)
-        self.idle = empty(G["eye"], "Nothing playing.\n\n/ searches YouTube and your videos · 2 opens your library")
+        self.idle = empty(G["eye"], "Nothing playing.\n\n/ searches YouTube and your videos · Space t l opens your library")
         self.idle.set_can_target(False)
         self.over.add_overlay(self.idle)
         self.center = label("", "glyph center-glyph", xalign=0.5, ellipsize=False, halign=Gtk.Align.CENTER,
@@ -151,7 +151,7 @@ class Watch(View):
 
         # bottom: the timeline and the buttons
         self.timeline = Timeline(c.seek_to, self._hover)
-        self.pp = self._btn(G["play"], "Play / pause  (space)", c.toggle, big=True)
+        self.pp = self._btn(G["play"], "Play / pause  (p)", c.toggle, big=True)
         self.t_now = label("", "v-time", ellipsize=False)
         self.chap = label("", "v-chapter")
         self.volb = self._btn(G["vol"], "Mute  (m)", c.mute)
@@ -519,7 +519,7 @@ class Watch(View):
 # ===================================================================== up next (the queue)
 class Queue(View):
     name, title, glyph = "queue", "Up next", G["queue"]
-    hints = [("Enter", "play"), ("dd", "remove"), ("J K", "move"), ("A", "play next"), ("D", "download")]
+    hints = [("Enter", "play"), ("dd", "remove"), ("J K", "move"), ("gp", "paste"), ("A", "play next"), ("Space", "more")]
 
     def __init__(self, win):
         super().__init__(win)
@@ -583,7 +583,7 @@ class Queue(View):
         if q and not c.autoplay:
             rows.append(("header", section("Autoplay is off · stops after your videos",
                                            label("M turns it on", "sect-chip off", ellipsize=False))))
-        self.rows.set_rows(rows, empty=empty(G["queue"], "Nothing lined up.\n\n3 searches YouTube · 2 opens your videos\n"
+        self.rows.set_rows(rows, empty=empty(G["queue"], "Nothing lined up.\n\nSpace f y searches YouTube · Space t l opens your videos\n"
                                                          "a adds a video here, Enter plays it now"))
 
     def shown(self):
@@ -664,7 +664,7 @@ class Library(View):
     videos; inside a folder, its episodes in order with how much you've
     seen. h j k l move, Enter opens or plays, Backspace goes up."""
     name, title, glyph = "library", "Library", G["lib"]
-    hints = [("h j k l", "move"), ("Enter", "open / play"), ("Backspace", "up"), ("a", "add"), ("/", "search")]
+    hints = [("h j k l", "move"), ("Enter", "open / play"), ("Backspace", "up"), ("a", "add"), ("Space", "more")]
     CW, CH = 208, 117
 
     def __init__(self, win):
@@ -896,7 +896,7 @@ class Library(View):
 # ===================================================================== youtube
 class YouTube(View):
     name, title, glyph = "youtube", "YouTube", G["yt"]
-    hints = [("/", "search"), ("Enter", "play"), ("a", "add"), ("A", "play next"), ("D", "download")]
+    hints = [("Enter", "play"), ("a", "add"), ("A", "play next"), ("D", "download"), ("Space", "more")]
 
     def __init__(self, win):
         super().__init__(win)
@@ -988,7 +988,7 @@ class YouTube(View):
 # ===================================================================== history
 class History(View):
     name, title, glyph = "history", "History", G["history"]
-    hints = [("Enter", "resume"), ("a", "add"), ("dd", "forget"), ("/", "search")]
+    hints = [("Enter", "resume"), ("a", "add"), ("dd", "forget"), ("Space", "more")]
 
     def __init__(self, win):
         super().__init__(win)
@@ -1046,13 +1046,18 @@ class History(View):
             self.win.set_mode("NORMAL")
             return True
         if k in ("dd", "x") and e:
-            for i in self.rows.range():
-                self.core.store.forget(self.rows.items[i]["_key"])
-            self.core.store.flush()
+            keys_ = [self.rows.items[i]["_key"] for i in self.rows.range()]
             self.rows.visual(False)
             self.win.set_mode("NORMAL")
-            self.refresh(None)
-            self.win.toast("Forgotten")
+
+            def forget():
+                for key in keys_:
+                    self.core.store.forget(key)
+                self.core.store.flush()
+                self.refresh(None)
+                self.win.toast("Forgotten")
+            n = len(keys_)
+            self.win.confirm(f"Forget {'this video' if n == 1 else f'{n} videos'} from your history?", forget)
             return True
         if k == "D" and e:
             self.core.download(e)
@@ -1068,7 +1073,7 @@ class History(View):
 # ===================================================================== downloads
 class Downloads(View):
     name, title, glyph = "downloads", "Downloads", G["dl"]
-    hints = [("Enter", "play"), ("R", "retry"), ("dd", "delete"), ("x", "cancel")]
+    hints = [("Enter", "play"), ("R", "retry"), ("dd", "delete"), ("x", "cancel"), ("Space", "more")]
 
     def __init__(self, win):
         super().__init__(win)

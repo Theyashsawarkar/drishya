@@ -1,125 +1,32 @@
 """The player window: tabs, the controls, the vim status line, fullscreen
-and theater modes, and the vim key engine (counts, pending keys,
-registers). Laid out like nāda's, so the two feel like one app."""
+and theater modes, and the vim key engine: keymap.py's binds through
+Vyom's keys.py (counts, sequences, the Space leader), plus visual mode,
+registers, : and /. Laid out like nāda's, so the two feel like one app."""
 import logging
 import os
 import re
 import urllib.request
 
-from gi.repository import Gdk, GLib, Gtk
+from gi.repository import Gdk, Gio, GLib, Gtk
 
-from . import auth, config, library, youtube
-from .util import fmt_time, track_name
+from . import auth, config, keymap, keys, library, youtube
 from .finder import Finder
+from .leader import KeySheet, Palette, WhichKey
 from .search import SearchPanel
+from .util import fmt_time, track_name
 from .views import Downloads, History, Library, Queue, Watch, YouTube
-from .widgets import G, box, hint, keycap, label
+from .widgets import G, box, hint, label
 
-# keybind: Drishya/everywhere | / | Open the search panel (YouTube, your videos, history, links, : commands)
-# keybind: Drishya/everywhere | o | Open the search panel to paste a link or file path
-# keybind: Drishya/everywhere | Ctrl+Tab / Ctrl+Shift+Tab | Switch to the next / previous tab (wraps around)
-# keybind: Drishya/everywhere | Ctrl+0..4 | Switch to that numbered tab at once (the number shown on it)
-# keybind: Drishya/everywhere | 0 | Switch to Watch (the video)
-# keybind: Drishya/everywhere | 1 | Switch to Up next (the queue)
-# keybind: Drishya/everywhere | 2 | Switch to your video library (a grid)
-# keybind: Drishya/everywhere | 3 | Switch to your history (continue watching)
-# keybind: Drishya/everywhere | 4 | Switch to downloads
-# keybind: Drishya/everywhere | j / k | Move down / up (counts work: 5j)
-# keybind: Drishya/everywhere | gg / G | Jump to the top / bottom (12G: to the 12th)
-# keybind: Drishya/everywhere | Ctrl+d / Ctrl+u | Scroll half a page down / up
-# keybind: Drishya/everywhere | Space | Toggle play / pause
-# keybind: Drishya/everywhere | Enter | Play the selected video
-# keybind: Drishya/everywhere | . / , | Seek forward / back 10 seconds (3. = 30 s)
-# keybind: Drishya/everywhere | > / < | Play the next / previous video
-# keybind: Drishya/everywhere | = / - | Raise / lower the system volume (back as it was when the window closes)
-# keybind: Drishya/everywhere | Ctrl+= / Ctrl+- | Raise / lower the screen brightness (back as it was when the window closes)
-# keybind: Drishya/everywhere | m | Toggle mute
-# keybind: Drishya/everywhere | f | Toggle fullscreen (zen: just the video; Esc leaves it too)
-# keybind: Drishya/everywhere | t | Toggle theater mode (the video without the side panel)
-# keybind: Drishya/everywhere | z | Switch to the mini player (picture-in-picture)
-# keybind: Drishya/everywhere | Q | Open the settings menu (quality, speed, subtitles, audio, download)
-# keybind: Drishya/everywhere | c | Cycle subtitles (off, then each language)
-# keybind: Drishya/everywhere | # | Cycle the audio track
-# keybind: Drishya/everywhere | [ / ] | Slow down / speed up playback (0.25× steps)
-# keybind: Drishya/everywhere | \ | Reset playback speed to normal
-# keybind: Drishya/everywhere | { / } | Jump to the previous / next chapter
-# keybind: Drishya/everywhere | S | Start the video over from the beginning
-# keybind: Drishya/everywhere | M | Toggle autoplay (related videos or the next episode after yours)
-# keybind: Drishya/everywhere | D | Save the video to your disk with subtitles (download)
-# keybind: Drishya/everywhere | V | Select several videos (visual mode)
-# keybind: Drishya/everywhere | u | Restore the last queue change (undo)
-# keybind: Drishya/everywhere | Ctrl+r | Restore an undone queue change (redo)
-# keybind: Drishya/everywhere | : | Run a command (:seek 1:30, :speed 1.5…)
-# keybind: Drishya/everywhere | i | Show the video's title and link (in fullscreen, briefly in the corner)
-# keybind: Drishya/everywhere | ? | Show all keys
-# keybind: Drishya/everywhere | q / Esc | Close the window (pauses; z keeps a mini player)
-# keybind: Drishya/watch | h / l | Seek back / forward 5 seconds (3l = 15 s)
-# keybind: Drishya/watch | Tab | Switch the side panel (up next, chapters, info)
-# keybind: Drishya/watch | j / k | Move through the side panel's list (Enter plays it or jumps to the chapter)
-# keybind: Drishya/up next | dd | Remove the video from the queue (V: the selection)
-# keybind: Drishya/up next | yy | Copy the video (yank)
-# keybind: Drishya/up next | p / P | Paste removed or copied videos below / above
-# keybind: Drishya/up next | J / K | Move the video down / up
-# keybind: Drishya/up next | A | Move the video to play next
-# keybind: Drishya/up next | zz | Jump to the video that's playing
-# keybind: Drishya/library | h / j / k / l | Move through the grid
-# keybind: Drishya/library | Enter | Open the folder or play the video (the rest of the folder after it)
-# keybind: Drishya/library | Backspace | Go up a folder
-# keybind: Drishya/library | a / A | Add to the end of the queue / to play next
-# keybind: Drishya/library | R | Reload the folders
-# keybind: Drishya/youtube | a / A | Add the result to the end of the queue / to play next
-# keybind: Drishya/history | dd | Forget the video (removes it from the history)
-# keybind: Drishya/downloads | R | Retry a failed download
-# keybind: Drishya/downloads | x | Cancel a download in progress
-# keybind: Drishya/downloads | dd | Delete the saved file (asks first)
-# keybind: Drishya/search | Tab / Shift+Tab | Switch where to look (all, YouTube, your videos, history, commands)
-# keybind: Drishya/search | Ctrl+j / Ctrl+k | Move through the results while typing
-# keybind: Drishya/search | Enter | Play the result (a command: run it)
-# keybind: Drishya/search | Ctrl+Enter | Play the result next
-# keybind: Drishya/search | Shift+Enter | Add the result to Up next
-# keybind: Drishya/search | Ctrl+d | Download the result
-# keybind: Drishya/search | Ctrl+u | Clear the search box
-# keybind: Drishya/search | Ctrl+x | Clear recent searches
-# keybind: Drishya/search | Esc | Close the search panel
-# keybind: Drishya/settings | j / k | Move through the settings menu
-# keybind: Drishya/settings | l / Enter | Open the setting or choose it
-# keybind: Drishya/settings | h / Backspace | Go back in the settings menu
-# keybind: Drishya/settings | Esc | Close the settings menu
-# keybind: Drishya/sign in | Enter | Sign in and play (from the password field)
-# keybind: Drishya/sign in | Tab | Move between the username and password fields
-# keybind: Drishya/sign in | Ctrl+b | Sign in with your browser's login instead (sites yt-dlp plays)
-# keybind: Drishya/sign in | Ctrl+s | Toggle remembering the login in your keyring
-# keybind: Drishya/sign in | Esc | Cancel signing in
+# Every key is in keymap.py (data on Vyom's keys.py); its `# keybind:`
+# lines are generated there. This file runs them.
 
 log = logging.getLogger("drishya.window")
-# Keys a count can go before (5j, 3., 2dd); after any other key, a lone
-# number is the tab it names.
-COUNTED = {"j", "k", "h", "l", "G", "g", "d", "y", ".", ",", ">", "<", "=", "+", "-", "[", "]", "{", "}", "J", "K",
-           "x", "p", "P", "u", "C-d", "C-u", "C-r", "Page_Down", "Page_Up", "D", "A", "a"}
-TABS = ["watch", "queue", "library", "history", "downloads"]   # YouTube's results: a page, from the search panel
+
+TABS = keymap.TABS
 KEYNAMES = {"space": " ", "period": ".", "comma": ",", "greater": ">", "less": "<", "equal": "=", "plus": "+",
             "minus": "-", "slash": "/", "colon": ":", "question": "?", "KP_Enter": "Return", "Up": "k", "Down": "j",
             "KP_Add": "+", "KP_Subtract": "-", "bracketleft": "[", "bracketright": "]", "braceleft": "{",
             "braceright": "}", "numbersign": "#", "Left": "h", "Right": "l", "backslash": "\\"}
-HELP = [
-    ("Find & move", [("/", "search: YouTube, files, links"), ("j k", "down / up (5j)"), ("gg G", "top / bottom"),
-                     ("h j k l", "grid (library)"), ("0–4", "watch, up next, library…"), ("Ctrl+Tab", "next tab"),
-                     ("Esc", "back / close")]),
-    ("Play", [("space", "play / pause"), ("Enter", "play the selected"), (". ,", "±10 s"), ("h l", "±5 s (watch)"),
-              ("> <", "next / previous video"), ("= - m", "volume, mute"), ("Ctrl+= Ctrl+-", "brightness"),
-              ("S", "start over"),
-              ("M", "autoplay on/off")]),
-    ("Video", [("f", "fullscreen (zen)"), ("t", "theater"), ("z", "mini player"), ("Q", "settings menu"),
-               ("c", "subtitles"), ("#", "audio track"), ("[ ] \\", "speed, normal"), ("{ }", "chapters"),
-               ("Tab", "side: next, chapters, info")]),
-    ("Lists", [("dd", "remove"), ("J K", "move down / up"), ("yy p P", "copy, paste"), ("A", "play next"),
-               ("a", "add"), ("V", "select several"), ("u Ctrl+r", "undo, redo"), ("D", "download"),
-               (": ?", "commands, keys")]),
-]
-COMMANDS = ":yt <search> · :open <file, folder or link> · :add <…> · :seek 1:30 · :speed 1.5 · :vol 80 · " \
-           ":sub off · :quality 720 (or Q) · :sleep 30m · :shot · :logout · :autoplay on/off · :clear · :dl · :q · :qa"
-
-
 def login_reason(why):
     """The server's refusal in plain words (the raw error only when it's
     something else)."""
@@ -139,11 +46,13 @@ class Window(Gtk.ApplicationWindow):
         self.add_css_class("drishya")
         self.set_default_size(1280, 760)
         self.register = []
-        self.count, self.pending, self.mode = "", "", "NORMAL"
+        self.m = keys.Machine()   # a count and a pending sequence between keys
+        self.mode = "NORMAL"
+        self.notes_shown = set()
         self.confirm_cb = None
         self.tab = "watch"
         self.thumbs, self.thumb_wait = {}, set()
-        self.thumb_timer = self.toast_timer = self.digit_timer = self.z_timer = self.sleep_timer = None
+        self.thumb_timer = self.toast_timer = self.sleep_timer = None
         self.fullscreened = False
         self.theater = False
 
@@ -165,7 +74,10 @@ class Window(Gtk.ApplicationWindow):
                 continue
             b = Gtk.Button()
             b.add_css_class("tab")
-            b.set_child(box(keycap(str(i)), label(v.title, ellipsize=False), spacing=7))
+            # Just the name: digits are counts now (5j). H / L step through the
+            # tabs, Space t picks one; the tooltip says which keys.
+            b.set_child(label(v.title, ellipsize=False))
+            b.set_tooltip_text(f"{v.title}: H / L step through the tabs, Ctrl+{i} jumps here")
             b.set_focusable(False)
             b.connect("clicked", lambda _b, n=v.name: self.switch(n))
             self.tabbtn[v.name] = b
@@ -199,9 +111,13 @@ class Window(Gtk.ApplicationWindow):
                                       valign=Gtk.Align.END, can_target=False)
         self.toast_rev.set_child(box(self.toast_lab, cls="toast"))
         overlay.add_overlay(self.toast_rev)
-        self.help = self._help()
-        self.help.set_visible(False)
+        self.help = KeySheet(keymap.COMMANDS)
         overlay.add_overlay(self.help)
+        # the leader: what can come next, and every action (Space Space)
+        self.which = WhichKey()
+        overlay.add_overlay(self.which)
+        self.palette = Palette(lambda b: self.run(b.action, 1, False))
+        overlay.add_overlay(self.palette)
         self.menu = self._settings_menu()
         self.menu.set_visible(False)
         overlay.add_overlay(self.menu)
@@ -226,10 +142,10 @@ class Window(Gtk.ApplicationWindow):
         overlay.add_overlay(self.login)
         self.login_req = None
 
-        keys = Gtk.EventControllerKey()
-        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        keys.connect("key-pressed", self._key)
-        self.add_controller(keys)
+        ctl = Gtk.EventControllerKey()
+        ctl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        ctl.connect("key-pressed", self._key)
+        self.add_controller(ctl)
         self.connect("close-request", lambda *_: (self.hide_window(), True)[1])
         self.connect("notify::fullscreened", lambda *_: self._fullscreen_changed())
 
@@ -254,7 +170,7 @@ class Window(Gtk.ApplicationWindow):
     def _controls(self):
         c = self.core
         step = lambda: c.conf["seek_step"]
-        self.pp = self._btn(G["play"], "Play / pause  (space)", c.toggle, big=True)
+        self.pp = self._btn(G["play"], "Play / pause  (p)", c.toggle, big=True)
         ctl = box(self._btn(G["prev"], "Previous video  (<)", c.prev),
                   self._btn(G["back"], "Back 10 seconds  (,)", lambda: c.seek(-step())),
                   self.pp,
@@ -291,20 +207,6 @@ class Window(Gtk.ApplicationWindow):
         return box(ctl, box(self.tcur, self.progress, self.tlen, spacing=10, hexpand=True, margin_start=10,
                             margin_end=10), side, cls="bar", spacing=8)
 
-    def _help(self):
-        grid = Gtk.Grid(column_spacing=34, row_spacing=4, column_homogeneous=True)
-        for col, (title, rows) in enumerate(HELP):
-            grid.attach(label(title.upper(), "h"), col, 0, 1, 1)
-            for r, (k, d) in enumerate(rows, 1):
-                b = box(spacing=8)
-                b.append(box(*[keycap(x) for x in k.split()], spacing=3, halign=Gtk.Align.END))
-                b.append(label(d, "d"))
-                grid.attach(b, col, r, 1, 1)
-        cmds = label(COMMANDS, "d", wrap=True, margin_top=14, max_width_chars=110)
-        return box(grid, cmds, label("? or Esc closes this", "dim", margin_top=10), vertical=True, cls="help",
-                   valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
-
-    # ------------------------------------------------------------ settings menu (Q)
     def _settings_menu(self):
         self.menu_title = label("Settings", "menu-title")
         self.menu_list = box(vertical=True, spacing=2)
@@ -552,10 +454,22 @@ class Window(Gtk.ApplicationWindow):
         for n, b in self.tabbtn.items():
             (b.add_css_class if n == name else b.remove_css_class)("on")
         self.views[name].shown()
+        self.drop_pending()
         self.set_mode("NORMAL")
         self._hints()
         if self.cmdline.get_visible():
             self._cmd_close()
+
+    def drop_pending(self):
+        """Another tab (or the window hidden): what was waiting goes. A key
+        sequence or count, an unanswered question (else a y on the new tab
+        would answer it), the palette and key sheet of the old tab."""
+        self.m.reset()
+        self.which.cancel()
+        self.confirm_cb = None
+        self._show_pending()
+        self.palette.close()
+        self.help.set_visible(False)
 
     def toggle_fullscreen(self):
         if self.fullscreened:
@@ -599,7 +513,7 @@ class Window(Gtk.ApplicationWindow):
             self.hints.append(hint(k, w))
 
     def _show_pending(self):
-        self.msg.set_text(f"{self.count}{self.pending}")
+        self.msg.set_text(self.m.typed())
 
     def toast(self, text):
         if not text:
@@ -649,7 +563,7 @@ class Window(Gtk.ApplicationWindow):
     def confirm(self, question, cb):
         self.confirm_cb = cb
         self.set_mode("CONFIRM")
-        self.msg.set_text(f"{question}  y / n")
+        self.msg.set_text(f"{question}  y yes · any other key no")
 
     # ------------------------------------------------------------ core events
     def _core_event(self, e):
@@ -757,6 +671,7 @@ class Window(Gtk.ApplicationWindow):
         self._tick()
 
     def hide_window(self):
+        self.drop_pending()
         if self.fullscreened:
             self.unfullscreen()
         self.set_visible(False)
@@ -785,12 +700,13 @@ class Window(Gtk.ApplicationWindow):
         ctrl_on = bool(state & Gdk.ModifierType.CONTROL_MASK)
         if ctrl_on and name in ("Tab", "ISO_Left_Tab"):
             back = name == "ISO_Left_Tab" or bool(state & Gdk.ModifierType.SHIFT_MASK)
-            i = TABS.index(self.tab) if self.tab in TABS else 0
-            self.switch(TABS[(i + (-1 if back else 1)) % len(TABS)])
+            self.step_tab(-1 if back else 1)
             return True
         if ctrl_on and re.fullmatch(r"[0-4]", name):
             self.switch(TABS[int(name)])
             return True
+        if self.palette.get_visible():
+            return self.palette.key(name, ctrl_on)
         if self.search.get_visible():
             return self.search.key(name, state)
         if self.menu.get_visible():
@@ -821,93 +737,177 @@ class Window(Gtk.ApplicationWindow):
                 return True
             return False
         if self.confirm_cb:
+            if keys.is_modifier(name):
+                return True
             cb, self.confirm_cb = self.confirm_cb, None
             self.set_mode("NORMAL")
             self.msg.set_text("")
-            if name in ("y", "Y", "Return"):
+            if name == "y":
                 cb()
             else:
                 self.toast("Cancelled")
             return True
         if self.help.get_visible():
-            if name in ("question", "Escape", "q"):
-                self.help.set_visible(False)
-            return True
-        if name in ("Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R", "Super_L", "Super_R",
-                    "ISO_Level3_Shift"):
+            return self.help.key(name)
+        if keys.is_modifier(name):
             return False
-        k = KEYNAMES.get(name, name)
+        mods = {m for m, mask in (("ctrl", Gdk.ModifierType.CONTROL_MASK), ("shift", Gdk.ModifierType.SHIFT_MASK),
+                                  ("alt", Gdk.ModifierType.ALT_MASK)) if state & mask}
+        tok = keys.token(name, mods)
+        if tok is None:
+            return False
+        # the old engine's name for the key: what dispatch() and the views know
+        legacy = KEYNAMES.get(name, name)
         if ctrl_on:
-            k = "C-" + k.lower()
+            legacy = "C-" + legacy.lower()
         if self.tab == "watch" and not self.fullscreened:
             self.views["watch"].poke()   # a key shows the controls (zen shows nothing)
-        if re.fullmatch(r"[0-9]", k) and not self.pending:
-            if k == "0" and not self.count:
-                self.switch("watch")
-                return True
-            self.count += k
-            self._show_pending()
-            if self.digit_timer:
-                GLib.source_remove(self.digit_timer)
-            if re.fullmatch(r"[1-4]", self.count):
-                self.digit_timer = GLib.timeout_add(650, self._digit_tab, self.count)
+        if self.fullscreened and tok == " " and not self.m.busy():
+            self.dispatch(" ")           # zen: Space plays and pauses, no leader
             return True
-        if self.digit_timer:
-            GLib.source_remove(self.digit_timer)
-            self.digit_timer = None
-            # A lone tab number followed by a key that takes no count (V, Esc,
-            # /, Tab…), or a 1 (a count of one changes nothing): the number
-            # meant the tab. Go there, then do the key.
-            if re.fullmatch(r"[1-4]", self.count) and (k not in COUNTED or self.count == "1"):
-                tab, self.count = self.count, ""
-                self._show_pending()
-                self.switch(TABS[int(tab)])
-        n = int(self.count or "1")
-        had_count = bool(self.count)
-        self.count = ""
-        if self.pending:
-            combo, self.pending = self.pending + k, ""
-            if self.z_timer:
-                GLib.source_remove(self.z_timer)
-                self.z_timer = None
+        km = self.keymap_now()
+        had_count = bool(self.m.count)
+        if tok == "<" and not self.m.pending:
+            # keys.py reads "<" as the start of <CR>, <C-d>… and would wait:
+            # run it at once (with its count)
+            n = int(self.m.count or 1)
+            self.m.reset()
             self._show_pending()
-            if combo in ("gg", "dd", "dG", "yy", "zz"):
-                self.dispatch(combo, n, had_count)
+            self.which.cancel()
+            self.run(km.table["<"].action, n, had_count)
             return True
-        lst = self.views[self.tab].list()
-        visual = lst is not None and lst.vstart is not None
-        if k in ("g", "d", "y") and not (visual and k in ("d", "y")):
-            if k != "g" and self.tab not in ("queue", "history", "downloads"):
-                return self.dispatch(k, n, had_count) or True
-            self.pending = k
-            self.count = str(n) if had_count else ""
-            self._show_pending()
+        r = self.m.feed(km, tok)
+        self._show_pending()
+        if r.kind == "pending":
+            if self.m.pending:
+                self.which.schedule(km, self.m.pending)
             return True
-        if visual and k in ("d", "y"):
-            return self.dispatch(k + k, n, had_count) or True
-        if k == "z":
-            self.pending = "z"
-            self._show_pending()
-            self.z_timer = GLib.timeout_add(450, self._z_alone)
+        self.which.cancel()
+        if r.kind == "cancel":
             return True
-        self.dispatch(k, n, had_count)
+        if r.kind == "unknown":
+            if len(keys.tokens(r.seq)) == 1:
+                self.dispatch(legacy, r.count, had_count)   # a key the views know that the keymap doesn't list
+            else:
+                self.toast(f"{keys.spell(r.seq)} isn't a key here · Space ? shows them")
+            return True
+        self.run(r.bind.action, r.count, had_count)
         return True
 
-    def _digit_tab(self, c):
-        self.digit_timer = None
-        if self.count == c:
-            self.count = ""
-            self._show_pending()
-            self.switch(TABS[int(c)])
-        return False
+    def keymap_now(self):
+        lst = self.views[self.tab].list()
+        visual = lst is not None and lst.vstart is not None
+        return keys.Keymap(keymap.binds_for(self.tab, visual), keymap.GROUPS)
 
-    def _z_alone(self):
-        self.z_timer = None
-        if self.pending == "z":
-            self.pending = ""
-            self._show_pending()
-            self.app.show_mini()
-        return False
+    def run(self, action, n=1, had_count=False):
+        """Run a keymap action (see keymap.py): do:, tab:, call:, moved:."""
+        if not isinstance(action, str):
+            return
+        action, _, note = action.partition("|note:")
+        kind, _, arg = action.partition(":")
+        if kind == "do":
+            self.dispatch(arg, n, had_count)
+        elif kind == "tab":
+            if arg in ("+1", "-1"):
+                self.step_tab(int(arg) * n)
+            else:
+                self.switch(arg)
+        elif kind == "call":
+            meth, _, extra = arg.partition(":")
+            getattr(self, "k_" + meth)(*([extra] if extra else []))
+        elif kind == "moved":
+            self.toast(f"That key moved: it's {arg} now")
+        if note and note not in self.notes_shown:
+            self.notes_shown.add(note)
+            self.toast(note)
+
+    def step_tab(self, d):
+        i = TABS.index(self.tab) if self.tab in TABS else 0
+        self.switch(TABS[(i + d) % len(TABS)])
+
+    # keymap actions (call:<name> runs k_<name>)
+    def k_toggle_play(self):
+        self.core.toggle()
+
+    def k_palette(self):
+        km = self.keymap_now()
+        rows = [r for r in keys.palette_rows(km)
+                if isinstance(r[2].action, str) and not r[2].action.startswith(("moved:", "call:palette"))]
+        if self.fullscreened:
+            self.unfullscreen()
+        self.palette.open(rows)
+
+    def k_keysheet(self):
+        extra = [(f"{scope} (its own keys)", [(keys.spell(b.seq), b.desc) for b in bs])
+                 for scope, _mode, bs in keymap.PANELS if scope != "leader"]
+        if self.fullscreened:
+            self.unfullscreen()
+        self.help.open(self.keymap_now(), keymap.where(self.tab), extra)
+
+    def k_mini(self):
+        self.app.show_mini()
+
+    def k_sleep(self):
+        self.sleep("off" if self.sleep_timer else "30m")
+
+    def _where(self, cur):
+        """The video's link (never with a user:password@ in it) or file."""
+        if cur.get("yt"):
+            return youtube.watch_url(cur["yt"])
+        if cur.get("url"):
+            return auth.split_userinfo(cur["url"])[0]
+        return cur.get("file") or ""
+
+    def _copy(self, text, what):
+        self.get_clipboard().set(text)
+        self.toast(f"Copied {what}")
+
+    def k_copy_title(self):
+        cur = self.core.current
+        if cur:
+            self._copy(cur["title"], "the title")
+        else:
+            self.toast("Nothing playing")
+
+    def k_copy_link(self):
+        cur = self.core.current
+        if cur:
+            self._copy(self._where(cur), "the link" if cur.get("yt") or cur.get("url") else "the file path")
+        else:
+            self.toast("Nothing playing")
+
+    def k_info(self):
+        self.dispatch("i")
+
+    def k_search(self, scope):
+        self.open_search("", int(scope))
+
+    def k_goto_playing(self):
+        if self.tab != "queue":
+            self.switch("queue")
+        self.dispatch("zz")
+
+    def k_open_browser(self):
+        cur = self.core.current
+        url = self._where(cur) if cur else ""
+        if not url.startswith(("http://", "https://")):
+            self.toast("The playing video has no web page" if cur else "Nothing playing")
+            return
+        try:
+            Gio.AppInfo.launch_default_for_uri(url, None)
+        except GLib.Error as e:
+            self.toast(f"Couldn't open the browser: {e.message}")
+
+    def k_refresh(self):
+        if self.tab == "library":
+            self.dispatch("R")
+            return
+        for v in self.views.values():
+            v.refresh(None)
+        self.toast("Refreshed")
+
+    def k_clear_queue(self):
+        self.confirm("Clear Up next?", lambda: (self.core.clear(), self.toast("Up next cleared · u brings it back")))
 
     def dispatch(self, k, n=1, had_count=False):
         c = self.core
@@ -1013,7 +1013,7 @@ class Window(Gtk.ApplicationWindow):
         elif k == "Q":
             self.open_settings()
         elif k == "?":
-            self.help.set_visible(True)
+            self.k_keysheet()
         elif k == "Escape":
             if self.fullscreened:
                 self.unfullscreen()
@@ -1132,7 +1132,7 @@ class Window(Gtk.ApplicationWindow):
         elif cmd in ("qa", "quit"):
             self.app.quit_all()
         elif cmd == "help":
-            self.help.set_visible(True)
+            self.k_keysheet()
         else:
             self.toast(f"Not a command: {cmd} · ? lists them")
 

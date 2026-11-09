@@ -270,3 +270,11 @@ flowbox.grid flowboxchild { padding: 0; background: none; }
   font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10.5px; }
 .folder-tile { background: alpha(@yellow, 0.07); border: 1px solid alpha(@yellow, 0.18); }
 .folder-big { font-size: 40px; color: @yellow; }
+
+/* ---- the Space leader (leader.py; the same in nāda) ---- */
+.whichkey { margin-bottom: 96px; padding: 10px 16px; }
+.whichkey .d { color: @sub0; font-size: 12.5px; }
+.whichkey .d.group { color: @mauve; font-weight: 600; }
+.palette { min-width: 560px; padding: 10px; }
+.palette-glyph { font-family: "JetBrainsMono Nerd Font", monospace; color: @mauve; margin-left: 6px; }
+.palette-entry { font-size: 14px; padding: 6px 4px; }
