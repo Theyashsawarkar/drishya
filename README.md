@@ -56,6 +56,20 @@
   shows the chapters, what's buffered, and a preview frame where you hover.
   `f` is fullscreen as **zen**: just the video, and a small readout in the
   corner when you seek or press `i`. `t` theater, `z` a mini player.
+- **Four layouts** (`T`, `Space u l`, `:layout`, or Settings → Layout; it
+  remembers yours): **Cinema** (the controls over the video, Up next beside
+  it), **Theater dock** (the controls in a dock under the video, never over
+  it, Up next as cards below), **Glass** (the video edge to edge, a floating
+  pill, volume and brightness as bars on the edges, `Tab` slides the side
+  in) and **Study split** (the video and a dock on the left, chapters big on
+  the right: for long lessons).
+- **Every control on screen**, each with its key in the tooltip: previous,
+  back 10 s, play, forward 10 s, next, mute, the volume and the screen's
+  brightness (`=` `-`, `Ctrl+=` `Ctrl+-`, shown over the video as they change).
+- **Quick to start**: drishya asks YouTube about a video before you press
+  play (the result you rest on in search, the next one in the queue), so it
+  opens in a couple of seconds; a loading screen (the thumbnail, a ring that
+  fills as the video comes in) is up from pressing play until it moves.
 - **Search from anywhere** (`/`): one floating panel for YouTube, your
   videos, your history, a link you paste and commands. Your own videos
   answer as you type, YouTube a moment later, the best match first; `Tab`
@@ -157,16 +171,21 @@ for_window [app_id="^dev\.vayu\.Drishya$" title="^drishya mini$"] floating enabl
 ## Usage
 
 ```
-drishya                     open the player, or close it if it's open
+drishya                     toggle the player: open it, hide it, or bring it here
 drishya play <what>         play now: a YouTube link, any stream or video link, a file or folder,
                             or search words (plays the top YouTube result)
 drishya add [--next] <what> add to Up next instead
 drishya show | hide | mini  the window, hidden, the mini player
 drishya tab <name>          watch queue library youtube history downloads
-drishya ctl <command>       toggle play pause next prev | seek +10 | seek 1:30 | vol 80 | speed 1.5
+drishya ctl <command>       toggle play pause next prev | seek +10 | seek 1:30 | vol 80 | speed 1.5 | layout dock
 drishya status [--json]     what's playing
-drishya quit                stop it
+drishya quit                close it for good (what `:q` does)
 ```
+
+`drishya` is a toggle: closed, it opens; open and focused, it hides (and
+pauses); open but behind other windows or on another workspace, it comes to
+you, focused. `q` and `Esc` hide the window too; `:q` or `drishya quit`
+closes drishya itself, saving where you were.
 
 Tabs: `0` Watch, `1` Up next, `2` Library, `3` History, `4` Downloads;
 `/` searches YouTube, your videos and history from any of them. Lists move with `j`/`k`; `Enter` plays. `?` shows every key.
@@ -223,6 +242,7 @@ Moved in this release (the old key says where, then goes away):
 | `m` | Toggle mute |
 | `f` | Toggle fullscreen (zen: just the video; Esc leaves it too) |
 | `t` | Toggle theater mode (the video without the side panel) |
+| `T` | Switch the player layout (cinema, dock, glass, study) |
 | `z` | Switch to the mini player (picture-in-picture) |
 | `c` | Cycle subtitles (off, then each language) |
 | `#` | Cycle the audio track |
@@ -257,6 +277,7 @@ Moved in this release (the old key says where, then goes away):
 | `Space t d` | Switch to downloads |
 | `Space u f` | Toggle fullscreen (zen) |
 | `Space u t` | Toggle theater mode |
+| `Space u l` | Switch the player layout (cinema, dock, glass, study) |
 | `Space u m` | Switch to the mini player |
 | `Space c c` | Cycle subtitles |
 | `Space c a` | Cycle the audio track |
@@ -480,7 +501,7 @@ Moved in this release (the old key says where, then goes away):
 | `:autoplay on` · `off` | Same as `M` |
 | `:dl` | Download what's playing |
 | `:clear` | Empty Up next (`u` brings it back) |
-| `:q` · `:qa` | Hide the window · quit |
+| `:q` · `:hide` | Quit drishya (playback stops; the toggle key starts it again) · hide the window |
 
 ## Links, streams and signing in
 

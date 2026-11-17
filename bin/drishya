@@ -2,7 +2,7 @@
 """drishya: a keyboard-driven video player with YouTube, your library,
 streams (HLS and any link), resume, history and downloads.
 
-  drishya                     open the player, or close it if it's open (toggle)
+  drishya                     toggle the player: open it, hide it, or bring it here
   drishya show | hide | mini  the full player, hidden, the mini player (picture-in-picture)
   drishya tab <name>          open on a tab: watch queue library youtube history downloads
   drishya play <what>         play now: a YouTube URL, an HLS/.m3u8 or other stream link,
@@ -10,9 +10,10 @@ streams (HLS and any link), resume, history and downloads.
   drishya add [--next] <what> add to the queue instead
   drishya ctl <command>       control playback: toggle play pause next prev
                               | seek +10 | seek -10 | seek 1:30 | vol +5 | vol 80 | speed 1.5
+                              | layout cinema|dock|glass|study (no name: the next one)
   drishya status [--json]     what's playing
   drishya daemon              start the resident player (the drishya service runs this)
-  drishya quit                stop it
+  drishya quit | close        close it for good (what :q does)
   drishya --version | --help
 
 The player is one resident process; this script only sends it a D-Bus
@@ -45,8 +46,56 @@ def gvariant_str(s):
 def action(name, param=None):
     params = "[]" if param is None else f"[<{gvariant_str(param)}>]"
     return subprocess.run(["gdbus", "call", "--session", "--dest", APP_ID, "--object-path", OBJ,
-                           "--method", "org.gtk.Actions.Activate", name, params, "{}"],
+                           "--timeout", "10", "--method", "org.gtk.Actions.Activate", name, params, "{}"],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+
+
+def owner_pid():
+    r = subprocess.run(["busctl", "--user", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                        "org.freedesktop.DBus", "GetConnectionUnixProcessID", "s", APP_ID],
+                       capture_output=True, text=True)
+    try:
+        return int(r.stdout.split()[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def gone(seconds):
+    for _ in range(int(seconds * 10)):
+        if not running():
+            return True
+        time.sleep(0.1)
+    return not running()
+
+
+def quit_daemon():
+    """Closes the player for good, and makes sure it did: one that doesn't
+    answer (stuck) is stopped by its unit, else sent SIGTERM (which quits it
+    the same way, saving first), then SIGKILL."""
+    if not running():
+        return 0
+    pid = owner_pid()
+    action("quit")
+    if gone(5):
+        return 0
+    systemctl = shutil.which("systemctl")
+    for unit in ("drishya.service", "drishya-daemon.service"):
+        if systemctl and subprocess.run([systemctl, "--user", "is-active", "--quiet", unit]).returncode == 0:
+            subprocess.run([systemctl, "--user", "stop", unit], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if gone(1):
+        return 0
+    import signal
+    for sig, wait in ((signal.SIGTERM, 5), (signal.SIGKILL, 2)):
+        if pid is None:
+            break
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return 0
+        if gone(wait):
+            return 0
+    print("drishya: it didn't quit" + (f" (pid {pid})" if pid else ""), file=sys.stderr)
+    return 1
 
 
 def start_daemon():
@@ -130,8 +179,8 @@ def main():
         return 0
     if cmd == "status":
         return status(args[1:])
-    if cmd == "quit":
-        return action("quit") if running() else 0
+    if cmd in ("quit", "close"):
+        return quit_daemon()
     if cmd in ("toggle", "show", "hide", "mini"):
         if cmd == "hide" and not running():
             return 0
@@ -140,7 +189,7 @@ def main():
         return 0 if ensure_daemon() and action("tab", args[1] if len(args) > 1 else "watch") == 0 else 1
     if cmd == "ctl":
         if len(args) < 2:
-            print("drishya ctl toggle|play|pause|next|prev|seek ±N|seek M:SS|vol ±N|vol N|speed N", file=sys.stderr)
+            print("drishya ctl toggle|play|pause|next|prev|seek ±N|seek M:SS|vol ±N|vol N|speed N|layout NAME", file=sys.stderr)
             return 2
         if not running():
             print("drishya isn't running", file=sys.stderr)

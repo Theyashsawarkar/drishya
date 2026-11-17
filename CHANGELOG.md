@@ -2,6 +2,47 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
+## Unreleased
+
+- `:q` closes drishya instead of hiding it (it saves where you were first); `:hide` hides, and `q` / `Esc`
+  still do. `drishya close` is `drishya quit`, and quit makes sure: a player that doesn't
+  answer is stopped through its unit, else SIGTERM, then SIGKILL.
+- The toggle (`drishya`) on a window that's open but not focused (on another workspace,
+  behind other windows) brings it here, focused: before, Wayland only marked it
+  urgent, so the key seemed to do nothing. A quick second press closes what the
+  first opened, even before the compositor's focus reaches GTK.
+- SIGTERM (`systemctl --user stop`, logout) and Ctrl+C quit cleanly, as `:q` does;
+  a key pressed while it's quitting no longer opens a window.
+
+- **Four layouts for Watch**, Cinema first: Cinema (as before), Theater dock
+  (the controls under the video, Up next as cards), Glass (edge to edge, a
+  floating pill, volume and brightness on the edges) and Study split (chapters
+  big beside the video). `T` or `Space u l` switches, `:layout <name>`,
+  Settings → Layout and `drishya ctl layout <name>` too; your pick is kept.
+- Search shows YouTube's thumbnails: the results kept the empty path from before
+  the thumbnail arrived.
+- **Quicker to start**: drishya asks YouTube about a video before you press
+  play (the search result you rest on, the top result, the next in the queue);
+  mpv then opens it in about 2 s instead of 10 or more (bin/drishya-ytdl, a
+  cache in front of yt-dlp; nothing with a login is cached).
+- **A loading screen** from pressing play until the picture moves: the video's
+  thumbnail, a ring that turns while it asks YouTube and fills as the first
+  seconds arrive, and what it's waiting for. One state, so it never blinks; a
+  stall while playing shows the ring over the paused picture.
+- Fewer stalls on a slow connection: it waits once for 5 s of video, at the start,
+  instead of stopping every few seconds for 1 s. Files on disk aren't cached.
+- The controls under the video: previous, back 10 s, play, forward 10 s, next,
+  the volume and the screen's brightness as sliders, each with its key in the
+  tooltip; = - and Ctrl+= Ctrl+- show the level over the video.
+- Adding to "play next" while a video still opens no longer replaces it.
+- The timeline's buffered part was twice too long (it read mpv's end of the
+  cache as a length).
+- Lighter: a closed window and the tabs you aren't looking at no longer rebuild on
+  every player event (they catch up when you look); the clock stops while paused or
+  closed; the timeline redraws only when something would move a pixel; a seek or a
+  volume step doesn't rebuild the queue or the chips; `j` / `k` touch only the rows
+  that change.
+
 ## v0.3.0 -- 2026-11-09
 
 - The tabs show just their name (they showed 0..4, which are counts now);

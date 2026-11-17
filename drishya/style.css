@@ -278,3 +278,55 @@ flowbox.grid flowboxchild { padding: 0; background: none; }
 .palette { min-width: 560px; padding: 10px; }
 .palette-glyph { font-family: "JetBrainsMono Nerd Font", monospace; color: @mauve; margin-left: 6px; }
 .palette-entry { font-size: 14px; padding: 6px 4px; }
+
+/* the loading screen (Loader): from pressing play until the picture moves */
+.loader { border-radius: 14px; }
+.drishya-root.full .loader { border-radius: 0; }
+.loader-backdrop { opacity: 0.5; }
+.loader-scrim { background-image: radial-gradient(circle, alpha(black, 0.55), alpha(black, 0.82)); }
+.loader.stalled .loader-scrim { background-image: none; background: alpha(black, 0.28); }
+.ring { color: @mauve; }
+.loader-title { font-size: 17px; font-weight: 700; color: white; margin-top: 6px; }
+.loader-note { font-size: 12px; color: alpha(white, 0.72); font-family: "JetBrainsMono Nerd Font", monospace; }
+/* volume and brightness: a pill that shows the level while it changes */
+.level { margin-top: 64px; padding: 9px 16px; border-radius: 99px; background: alpha(black, 0.62); color: white; }
+.level label { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 13px; }
+levelbar.level-bar trough { min-height: 5px; min-width: 140px; border-radius: 99px; background: alpha(white, 0.22); }
+levelbar.level-bar block.filled { border-radius: 99px; background: @mauve; }
+levelbar.level-bar block.empty { background: none; }
+scale.vslide { min-width: 76px; }
+scale.vslide trough { min-height: 4px; border-radius: 99px; background: alpha(white, 0.28); }
+scale.vslide highlight { border-radius: 99px; background: white; }
+scale.vslide slider { min-width: 10px; min-height: 10px; margin: -4px; border-radius: 99px; background: white; }
+.v-level { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: alpha(white, 0.75); min-width: 30px; }
+
+/* the four layouts of Watch (T switches) */
+/* dock and study: the controls in a solid dock under the video, always there */
+.dock { margin-top: 8px; padding: 4px 10px 6px; border-radius: 14px; background: alpha(@crust, 0.55); border: 1px solid alpha(white, 0.06); }
+.v-bottom.docked { padding: 4px 2px 0; background-image: none; }
+.v-bottom.docked button.vbtn { color: @text; }
+.v-bottom.docked button.vbtn.big { background: @mauve; color: @crust; }
+.v-bottom.docked button.vbtn.on { color: @mauve; }
+.v-bottom.docked .v-time, .v-bottom.docked .v-chapter { color: @sub1; }
+.v-bottom.docked .v-level { color: @sub0; }
+.v-bottom.docked scale.vslide trough { background: alpha(@text, 0.18); }
+.v-bottom.docked scale.vslide highlight, .v-bottom.docked scale.vslide slider { background: @mauve; }
+.layout-dock .side { border-left: none; border-top: 1px solid alpha(white, 0.06); margin-top: 8px; border-radius: 14px; }
+.layout-study .side { border-radius: 14px; margin-left: 8px; }
+/* the dock's Up next: cards side by side */
+.shelf { padding: 4px 6px; }
+.shelf-card { padding: 6px; border-radius: 12px; }
+.shelf-card .t { font-size: 12px; font-weight: 600; color: @text; }
+.shelf-card .a { font-size: 11px; color: @ov1; }
+.shelf-card.sel { background: alpha(@mauve, 0.16); }
+.shelf-card:hover { background: alpha(white, 0.06); }
+/* glass: one floating pill, volume and brightness on the edges */
+.v-bottom.glass { padding: 60px 18px 14px; background-image: linear-gradient(alpha(black, 0), alpha(black, 0.55)); }
+.v-bottom.glass .ctl-row { margin-top: 8px; padding: 4px 14px; border-radius: 99px; background: alpha(@crust, 0.72);
+  border: 1px solid alpha(white, 0.1); }
+.edge { margin: 0 18px; padding: 12px 8px; border-radius: 99px; background: alpha(@crust, 0.6); border: 1px solid alpha(white, 0.08); }
+.edge-icon { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 15px; color: white; }
+.edge-pct { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; color: alpha(white, 0.8); }
+scale.edge-scale trough { min-width: 5px; border-radius: 99px; background: alpha(white, 0.25); }
+scale.edge-scale highlight { border-radius: 99px; background: white; }
+scale.edge-scale slider { min-width: 12px; min-height: 12px; margin: -4px; border-radius: 99px; background: white; }

@@ -27,8 +27,8 @@ COMMANDS_LIST = [
     ("dl", "", "Download what's playing"),
     ("clear", "", "Empty Up next (u brings it back)"),
     ("logout", "<server>", "Forget a server's login"),
-    ("q", "", "Hide the window"),
-    ("qa", "", "Quit drishya"),
+    ("q", "", "Quit drishya (close it; the toggle key opens it again)"),
+    ("hide", "", "Hide the window (keeps running)"),
 ]
 
 
@@ -75,13 +75,14 @@ class Finder:
         return scope in (0, YT) and len(q.strip()) >= 2 and not looks_like_link(q) and youtube.available()
 
     def _lead(self, it, w=96, h=54):
-        path = self.win.thumb(it)
         progress = None
         e = self.core.store.entry(it)
         if e and e.get("duration"):
             progress = 1.0 if e.get("finished") else (e.get("pos") or 0) / e["duration"]
         glyph = G["yt"] if it.get("yt") else G["film"]
-        return lambda: thumb_widget(path, w, h, glyph, progress)
+        # Asked at each drawing: the path isn't there the first time (it's being
+        # fetched), and YouTube's results are built only once, on a worker thread.
+        return lambda: thumb_widget(self.win.thumb(it), w, h, glyph, progress)
 
     def _video(self, it, top=False):
         sub = []
@@ -145,6 +146,11 @@ class Finder:
         if hist:
             secs.append({"title": "History", "items": [self._video(e) for e in hist]})
         return secs
+
+    def rest(self, it):
+        """The selection rests on it: ask YouTube about it now, so Enter is quick."""
+        if it.get("yt"):
+            self.core.prefetch(it)
 
     def remote(self, q, scope):
         results = youtube.search(q, 10 if scope == 0 else 20)

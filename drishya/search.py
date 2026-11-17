@@ -36,6 +36,7 @@ class SearchPanel(Gtk.Box):
         self.rows = []           # their widgets
         self.gen = 0             # a newer query makes older answers stale
         self.timer = None
+        self.rest_timer = None   # the selection resting on a row: provider.rest(item)
         self.remote_sections = []
         self.remote_for = None
         self.set_size_request(760, -1)
@@ -208,6 +209,19 @@ class SearchPanel(Gtk.Box):
             (w.add_css_class if i == self.sel else w.remove_css_class)("sel")
         if 0 <= self.sel < len(self.rows):
             GLib.idle_add(self._scroll_to, self.sel)
+        # A row you rest on may be the one you pick: a provider with rest()
+        # gets ready for it (drishya asks YouTube ahead of time).
+        if self.rest_timer:
+            GLib.source_remove(self.rest_timer)
+            self.rest_timer = None
+        if hasattr(self.provider, "rest") and 0 <= self.sel < len(self.items):
+            self.rest_timer = GLib.timeout_add(450, self._rested, self.items[self.sel])
+
+    def _rested(self, item):
+        self.rest_timer = None
+        if self.get_visible():
+            self.provider.rest(item)
+        return False
 
     def _scroll_to(self, i):
         if not (0 <= i < len(self.rows)):

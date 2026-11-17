@@ -15,7 +15,7 @@ import time
 
 from gi.repository import GLib
 
-from . import auth, config, library, mpv, store, system, youtube
+from . import auth, config, library, mpv, store, system, youtube, ytcache
 from .util import dl_key, fmt_time, is_stream_url, stream_title, track_name, ytdl_raw_options  # noqa: F401
 
 log = logging.getLogger("drishya.core")
@@ -51,6 +51,7 @@ class Core:
         # The quality you picked (Q) wins over the config's, and stays picked.
         q = settings.get("quality")
         self.quality = q if isinstance(q, int) and 144 <= q <= 4320 else self.conf["quality"]
+        self.layout = settings.get("layout") or "cinema"   # the Watch tab's layout (T switches)
         self._qualities = {}          # yt id -> heights YouTube offers (asked once)
         self._boards = {}             # yt id -> its storyboard (preview frames), None when it has none
         self._details = {}            # yt id -> description etc. (asked once, for Info)
@@ -65,8 +66,16 @@ class Core:
         self.duration = 0.0
         self.paused = True
         self.idle = True
-        self.buffering = False
-        self.buffered = 0.0
+        self.buffering = False     # mpv waits for its cache (paused-for-cache)
+        self.buffered = 0.0        # seconds of video ready ahead of pos
+        # What the loading screen says, from pressing play until the picture
+        # moves: "finding" (asking YouTube, opening), "buffering" (filling
+        # the cache before the first frame), "stalled" (it ran dry while
+        # playing); None while it plays. One state, so the screen never blinks.
+        self.stage = None
+        self._started = False      # the first frame is decoded ("restart")
+        self._moved_from = None    # pos at that point: playing once it moves
+        self._prefetching = None
         self.volume = float(settings.get("volume", 100))
         self.muted = False
         self.speed = 1.0
@@ -142,7 +151,14 @@ class Core:
             ytdl_format=config.ytdl_format(self.quality),
             ytdl_raw_options=self._ytdl_raw,
             slang=c["subtitles"], sid="no", sub_auto="fuzzy", audio_display="no",
-            cache="yes", demuxer_max_bytes="150MiB", demuxer_max_back_bytes="50MiB",
+            # the cache is for what comes over the network: a file on disk plays at once
+            cache="auto", demuxer_max_bytes="150MiB", demuxer_max_back_bytes="50MiB",
+            script_opts="ytdl_hook-ytdl_path=" + os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                                              "bin", "drishya-ytdl"),
+            # Wait for 5 s of video, also before the first frame: mpv's 1 s runs dry at
+            # once on a connection slower than the video, a stutter every few seconds.
+            # On a fast one the 5 s are there almost at once.
+            cache_pause_wait="5", cache_pause_initial="yes",
             volume=str(int(self.volume)), volume_max="150", user_agent="drishya",
             screenshot_directory=os.path.expanduser("~/Pictures"))
         p = self.player
@@ -152,7 +168,7 @@ class Core:
                           ("speed", mpv.FMT_DOUBLE), ("track-list", mpv.FMT_NODE), ("chapter-list", mpv.FMT_NODE),
                           ("chapter", mpv.FMT_INT64), ("sid", mpv.FMT_NODE), ("aid", mpv.FMT_NODE),
                           ("sub-visibility", mpv.FMT_FLAG), ("media-title", mpv.FMT_STRING),
-                          ("seekable", mpv.FMT_FLAG), ("demuxer-cache-time", mpv.FMT_DOUBLE)):
+                          ("seekable", mpv.FMT_FLAG), ("demuxer-cache-duration", mpv.FMT_DOUBLE)):
             p.observe(name, fmt)
 
     # ------------------------------------------------------------ mpv events
@@ -161,6 +177,13 @@ class Core:
             prop, v = data
             if prop == "time-pos":
                 self.pos = v or 0.0
+                if self.stage and self._started and not self.buffering and not self.paused and v is not None:
+                    if self._moved_from is None:
+                        self._moved_from = v
+                    elif v > self._moved_from + 0.05:
+                        self._set_stage(None)       # the picture moves: playing
+                if self.paused:      # a seek or a frame step: nothing else will show it
+                    self.emit("moved")
                 return
             if prop == "duration":
                 self.duration = v or 0.0
@@ -170,16 +193,24 @@ class Core:
                 self.emit("player")
             elif prop == "pause":
                 self.paused = bool(v)
+                if self.paused and self._started and self.stage in ("buffering", "stalled"):
+                    self._set_stage(None)           # you paused it: the pause sign says so
                 self._save_position()
                 self.emit("player")
             elif prop == "idle-active":
                 self.idle = bool(v)
+                if self.idle:
+                    self._set_stage(None)
                 self.emit("player")
             elif prop == "eof-reached":
                 if v:
                     self._ended()
             elif prop == "paused-for-cache":
                 self.buffering = bool(v)
+                if self.buffering and self._started and self.stage is None:
+                    self._set_stage("stalled")
+                elif not self.buffering:
+                    self._moved_from = None         # playing again once pos moves on
                 self.emit("buffering")
             elif prop == "volume":
                 if v is not None:
@@ -188,8 +219,10 @@ class Core:
             elif prop == "mute":
                 self.muted = bool(v)
                 self.emit("player")
-            elif prop == "demuxer-cache-time":
+            elif prop == "demuxer-cache-duration":
                 self.buffered = v or 0.0
+                if self.paused or self.stage:   # filling up: the timeline and the loading ring show it
+                    self.emit("moved")
                 return
             elif prop == "media-title":
                 cur = self.current
@@ -219,10 +252,17 @@ class Core:
                 self.emit("tracks")
         elif name == "file-loaded":
             self.error = ""
+            if self.stage == "finding":
+                self._set_stage("buffering")
             self._pick_variant()
             self.emit("player", "tracks")
+            self._prefetch_next()
         elif name == "end-file":
             reason, err = data
+            if reason == mpv.END_ERROR:          # (the old file's end, when one replaces it, isn't)
+                self.buffering = False
+                self._set_stage(None)
+                self.emit("buffering")
             if reason == mpv.END_ERROR and self._login_needed and self.current is not None:
                 kind, why = self._login_needed
                 self._login_needed = None
@@ -243,6 +283,9 @@ class Core:
                 self.emit("player")
         elif name == "restart":
             self.buffering = False
+            self._started, self._moved_from = True, None
+            if self.paused:
+                self._set_stage(None)
             self.emit("buffering", "player")
         elif name == "log":
             level, text = data
@@ -505,7 +548,8 @@ class Core:
     def _save_settings(self):
         try:
             store.save_json(os.path.join(config.STATE, "settings.json"),
-                            {"autoplay": self.autoplay, "volume": round(self.volume), "quality": self.quality})
+                            {"autoplay": self.autoplay, "volume": round(self.volume), "quality": self.quality,
+                             "layout": self.layout})
         except OSError as e:
             log.warning("can't save settings: %s", e)
 
@@ -525,11 +569,13 @@ class Core:
         if self.cur >= at:
             self.cur += len(new)
         self._changed(before=before)
-        if where == "play" or self.cur < 0 or self.idle:
+        # (mpv is "idle" while a video still opens: that one isn't replaced)
+        if where == "play" or self.cur < 0 or self.idle and self.stage is None:
             self.play_index(at)
         else:
             self.toast(f"Added {len(new)} to {'play next' if where == 'next' else 'the queue'}"
                        if len(new) > 1 else f"Added “{new[0]['title'][:60]}”" + (" to play next" if where == "next" else ""))
+            self._prefetch_next()     # the next one may have just changed: get it ready
 
     def add_url(self, text, where="play"):
         """A YouTube URL, a file, or search words (plays the top result)."""
@@ -695,8 +741,37 @@ class Core:
         self._login_needed = None
         if src.startswith(("http://", "https://")):
             src = self._with_login(src, opts)
+        self._started, self._moved_from = False, None
+        self._set_stage("finding")
         self.player.loadfile(src, "replace", opts)
         self.player.set("pause", False)
+
+    def _set_stage(self, stage):
+        if stage != self.stage:
+            self.stage = stage
+            self.emit("loading")
+
+    # ------------------------------------------------------------ a head start
+    def prefetch(self, it):
+        """Asks YouTube about a video before it's played (ytcache.py), so
+        pressing play skips yt-dlp's few seconds. One at a time; the latest wins."""
+        if not it or not it.get("yt") or it.get("live") or self.downloaded(it) or not youtube.available():
+            return
+        link = youtube.watch_url(it["yt"])
+        if self._prefetching is not None:
+            self._prefetching = link            # asked after the one running
+            return
+        self._prefetching = link
+
+        def done(_r=None):
+            nxt, self._prefetching = self._prefetching, None
+            if nxt != link:
+                self.prefetch({"yt": youtube.video_id(nxt)})
+        self.bg(lambda: ytcache.prefetch(link), done, lambda e: done())
+
+    def _prefetch_next(self):
+        if 0 <= self.cur < len(self.queue) - 1:
+            self.prefetch(self.queue[self.cur + 1])
 
     def _with_login(self, url, opts):
         """Adds what this server needs to sign in, if we know it: the user

@@ -65,6 +65,7 @@ SECTIONS = [
         B("m", "do:m", "Toggle mute"),
         B("f", "do:f", "Toggle fullscreen (zen: just the video; Esc leaves it too)"),
         B("t", "do:t", "Toggle theater mode (the video without the side panel)"),
+        B("T", "call:cycle_layout", "Switch the player layout (cinema, dock, glass, study)"),
         B("z", "call:mini", "Switch to the mini player (picture-in-picture)"),
         B("c", "do:c", "Cycle subtitles (off, then each language)"),
         B("#", "do:#", "Cycle the audio track"),
@@ -100,6 +101,7 @@ SECTIONS = [
         B(" td", "tab:downloads", "Switch to downloads"),
         B(" uf", "do:f", "Toggle fullscreen (zen)"),
         B(" ut", "do:t", "Toggle theater mode"),
+        B(" ul", "call:cycle_layout", "Switch the player layout (cinema, dock, glass, study)"),
         B(" um", "call:mini", "Switch to the mini player"),
         B(" cc", "do:c", "Cycle subtitles"),
         B(" ca", "do:#", "Cycle the audio track"),
@@ -259,7 +261,7 @@ PANELS = [
 ]
 
 COMMANDS = ":yt <search> · :open <file, folder or link> · :add <…> · :seek 1:30 · :speed 1.5 · :vol 80 · " \
-           ":sub off · :quality 720 (or Q) · :sleep 30m · :shot · :logout · :autoplay on/off · :clear · :dl · :q · :qa"
+           ":sub off · :quality 720 (or Q) · :sleep 30m · :shot · :logout · :autoplay on/off · :clear · :dl · :q (quit) · :hide"
 
 
 def _with_when(sections):
@@ -352,6 +354,7 @@ def readme_tables():
 # keybind: Drishya/everywhere:normal | m | Toggle mute
 # keybind: Drishya/everywhere:normal | f | Toggle fullscreen (zen: just the video; Esc leaves it too)
 # keybind: Drishya/everywhere:normal | t | Toggle theater mode (the video without the side panel)
+# keybind: Drishya/everywhere:normal | T | Switch the player layout (cinema, dock, glass, study)
 # keybind: Drishya/everywhere:normal | z | Switch to the mini player (picture-in-picture)
 # keybind: Drishya/everywhere:normal | c | Cycle subtitles (off, then each language)
 # keybind: Drishya/everywhere:normal | # | Cycle the audio track
@@ -386,6 +389,7 @@ def readme_tables():
 # keybind: Drishya/everywhere:normal | Space t d | Switch to downloads
 # keybind: Drishya/everywhere:normal | Space u f | Toggle fullscreen (zen)
 # keybind: Drishya/everywhere:normal | Space u t | Toggle theater mode
+# keybind: Drishya/everywhere:normal | Space u l | Switch the player layout (cinema, dock, glass, study)
 # keybind: Drishya/everywhere:normal | Space u m | Switch to the mini player
 # keybind: Drishya/everywhere:normal | Space c c | Cycle subtitles
 # keybind: Drishya/everywhere:normal | Space c a | Cycle the audio track

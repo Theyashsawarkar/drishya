@@ -4,7 +4,9 @@ asked. bin/drishya talks to it over D-Bus (org.gtk.Actions)."""
 import concurrent.futures
 import json
 import os
+import signal
 import sys
+import time
 
 import gi
 
@@ -23,17 +25,23 @@ class App(Gtk.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.window = self.mini = self.core = self.mpris = None
+        self.quitting = False
         self.thumb_pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         for name, ptype in (("toggle", None), ("show", None), ("hide", None), ("mini", None), ("quit", None),
                             ("add", GLib.VariantType.new("s")), ("tab", GLib.VariantType.new("s")),
                             ("ctl", GLib.VariantType.new("s"))):
             a = Gio.SimpleAction.new(name, ptype)
-            a.connect("activate", getattr(self, "_act_" + name))
+            # nothing opens while it's on its way out (a key pressed just after :q)
+            a.connect("activate", lambda act, param, f=getattr(self, "_act_" + name): None if self.quitting else f(act, param))
             self.add_action(a)
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
         self.hold()   # stay resident: the player, MPRIS and downloads live here
+        # `systemctl stop`, a logout, Ctrl+C: quit the same way `:q` does, so
+        # what's saved on the way out is saved (Python's default just dies).
+        for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, lambda *_: (self.quit_all(), False)[1])
         self.load_css()
         self.core = Core()
         from .mpris import MPRIS
@@ -106,20 +114,36 @@ class App(Gtk.Application):
         self.ensure_window().show_window()
 
     def quit_all(self):
+        """Quit for good (`:q`, `drishya quit`, a signal). Twice is harmless: a
+        second release() would be a GLib critical."""
+        if self.quitting:
+            return
+        self.quitting = True
+        if self.core is not None and self.core.surface is not None:
+            self.core.surface.detach()   # mpv frees its GL objects while the context still exists
+        for w in (self.window, self.mini):   # gone at once, even if saving takes a moment
+            if w is not None:
+                w.set_visible(False)
         self.core.shutdown()
         self.release()
         self.quit()
 
     # ------------------------------------------------------------ actions
     def _act_toggle(self, *_):
+        """The toggle key. Closed: open it. Open and focused: hide it. Open but
+        not focused (behind a window, on another workspace): bring it here and
+        focus it, so one press always shows it -- present() alone can't, as a
+        Wayland compositor like sway only marks the window urgent without an
+        activation token."""
         w = self.window
-        if w is not None and w.get_visible():
-            if w.is_active():
-                w.hide_window()
-            else:
-                w.show_window()
-        else:
+        if w is None or not w.get_visible():
             self.show_full()
+        elif w.is_active() or time.monotonic() - w.shown_at < 0.6:
+            # just opened counts as focused: a quick second press closes it,
+            # even before the compositor's focus has reached GTK
+            w.hide_window()
+        else:
+            w.bring_back()
 
     def _act_show(self, *_):
         self.show_full()
@@ -169,8 +193,8 @@ class App(Gtk.Application):
             c.next()
         elif cmd in ("prev", "previous"):
             c.prev()
-        elif cmd in ("seek", "vol", "volume", "speed"):
-            self.ensure_window().command(f"{cmd} {arg}")
+        elif cmd in ("seek", "vol", "volume", "speed", "layout"):
+            self.ensure_window().command(f"{cmd} {arg}".strip())
 
     def do_shutdown(self):
         if self.core is not None:

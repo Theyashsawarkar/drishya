@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""yt-dlp for mpv, with drishya's head start: mpv's ytdl_hook runs this in
+place of yt-dlp. A question drishya already asked (while you looked at the
+result) is answered at once from its cache; anything else, and anything
+with a login, goes to yt-dlp. See drishya/ytcache.py."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from drishya import ytcache  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(ytcache.shim(sys.argv[1:]))

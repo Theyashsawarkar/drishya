@@ -46,12 +46,35 @@ class Mini(Gtk.Window):
         over.add_controller(click)
         self.connect("close-request", lambda *_: (self.close_mini(), True)[1])
         self.connect("notify::visible", lambda *_: self._visible())
-        GLib.timeout_add(300, self._tick)
+        self.tick_id = None
+        core.listen(self._event)
+
+    def _event(self, e):
+        if not isinstance(e, tuple) and self.get_visible():
+            self._tick()
+            self._sync_timer()
 
     def _visible(self):
         if self.get_visible():
             GLib.idle_add(lambda: (self.area.attach(), False)[1])
             self.show_osd()
+            self._tick()
+            self._sync_timer()
+
+    def _moving(self):
+        c = self.core
+        return self.get_visible() and c.current is not None and not c.paused and not c.idle
+
+    def _sync_timer(self):
+        if self.tick_id is None and self._moving():
+            self.tick_id = GLib.timeout_add(300, self._timer)
+
+    def _timer(self):
+        if not self._moving():
+            self.tick_id = None
+            return False
+        self._tick()
+        return True
 
     def show_osd(self):
         self.osd.set_reveal_child(True)
@@ -66,13 +89,20 @@ class Mini(Gtk.Window):
         return False
 
     def _tick(self):
-        if self.get_visible():
-            c = self.core
-            cur = c.current
-            self.title.set_text((G["pause"] + "  " if c.paused else "") + (cur["title"] if cur else "Nothing playing"))
-            self.bar.set_fraction(c.pos / c.duration if c.duration else 0)
-            self.time.set_text(f"{fmt_time(c.pos)} / {fmt_time(c.duration)}" if c.duration else "")
-        return True
+        if not self.get_visible():
+            return
+        c = self.core
+        cur = c.current
+        text = (G["pause"] + "  " if c.paused else "") + (cur["title"] if cur else "Nothing playing")
+        if text != self.title.get_text():
+            self.title.set_text(text)
+        fraction = c.pos / c.duration if c.duration else 0
+        width = self.bar.get_width()
+        if not width or abs(fraction - self.bar.get_fraction()) * width >= 1:
+            self.bar.set_fraction(fraction)
+        text = f"{fmt_time(c.pos)} / {fmt_time(c.duration)}" if c.duration else ""
+        if text != self.time.get_text():
+            self.time.set_text(text)
 
     def close_mini(self):
         self.set_visible(False)

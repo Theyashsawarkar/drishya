@@ -5,6 +5,7 @@ registers, : and /. Laid out like nāda's, so the two feel like one app."""
 import logging
 import os
 import re
+import time
 import urllib.request
 
 from gi.repository import Gdk, Gio, GLib, Gtk
@@ -51,6 +52,9 @@ class Window(Gtk.ApplicationWindow):
         self.notes_shown = set()
         self.confirm_cb = None
         self.tab = "watch"
+        self.tick_id = None
+        self.level_want, self.level_busy = {}, set()
+        self.stale, self.controls_stale = {}, False   # tab -> last event it missed; the bar below
         self.thumbs, self.thumb_wait = {}, set()
         self.thumb_timer = self.toast_timer = self.sleep_timer = None
         self.fullscreened = False
@@ -153,8 +157,9 @@ class Window(Gtk.ApplicationWindow):
         for v in self.views.values():
             v.refresh(None)
         self._update_controls()
+        self.views["watch"].set_layout(core.layout)   # the one you picked last time (T)
         self.switch("watch")
-        GLib.timeout_add(250, self._tick)
+        self.connect("notify::visible", lambda *_: self._visibility())
 
     # ------------------------------------------------------------ building
     def _btn(self, glyph, tip, cb, big=False):
@@ -237,10 +242,18 @@ class Window(Gtk.ApplicationWindow):
                   self._menu_subs)]
         if len(aud) > 1:
             items.append(("Audio", track_name(cur_aud) if cur_aud else "", self._menu_audio))
+        items.append(("Layout", self.views["watch"].LAYOUTS[self.views["watch"].layout], self._menu_layout))
         if c.current and (c.current.get("yt") or c.current.get("url")) and not c.current.get("live") \
                 and not c.downloaded(c.current):
             items.append((f"Download at {c.quality}p", "D", lambda: (self._menu_close(), c.download(c.current))))
         self._menu_show("root", "Settings", "", items, sel)
+
+    def _menu_layout(self):
+        w = self.views["watch"]
+        names = list(w.LAYOUTS)
+        self._menu_show("layout", "Layout", "T switches to the next one", [
+            (("● " if n == w.layout else "") + w.LAYOUTS[n], "", lambda n=n: (self._menu_close(), self.set_layout(n)))
+            for n in names], names.index(w.layout))
 
     def _menu_show(self, page, title, note, items, sel=0):
         """items: [(name, value, action)]: action() opens a page or does it."""
@@ -453,12 +466,14 @@ class Window(Gtk.ApplicationWindow):
             self.views["watch"].poke()
         for n, b in self.tabbtn.items():
             (b.add_css_class if n == name else b.remove_css_class)("on")
+        self._catch_up()
         self.views[name].shown()
         self.drop_pending()
         self.set_mode("NORMAL")
         self._hints()
         if self.cmdline.get_visible():
             self._cmd_close()
+        self._tick()
 
     def drop_pending(self):
         """Another tab (or the window hidden): what was waiting goes. A key
@@ -488,6 +503,26 @@ class Window(Gtk.ApplicationWindow):
         (self.root.add_css_class if on else self.root.remove_css_class)("full")
         self.fullbtn.get_child().set_text(G["unfull"] if on else G["full"])
         self.views["watch"].enter_zen(on)   # fullscreen is zen: the video, nothing over it
+
+    def set_layout(self, name, say=True):
+        w = self.views["watch"]
+        if name not in w.LAYOUTS:
+            self.toast(":layout " + " | ".join(w.LAYOUTS))
+            return
+        if self.tab != "watch":
+            self.switch("watch")
+        w.set_layout(name)
+        self.core.layout = name
+        self.core._save_settings()
+        if say:
+            self.toast(f"Layout: {w.LAYOUTS[name]} · T for the next one")
+
+    def k_cycle_layout(self):
+        self.cycle_layout()
+
+    def cycle_layout(self):
+        names = list(self.views["watch"].LAYOUTS)
+        self.set_layout(names[(names.index(self.views["watch"].layout) + 1) % len(names)])
 
     def toggle_theater(self):
         self.theater = not self.theater
@@ -558,6 +593,7 @@ class Window(Gtk.ApplicationWindow):
     def _toast_hide(self):
         self.toast_rev.set_reveal_child(False)
         self.toast_timer = None
+        self.shown_at = 0.0
         return False
 
     def confirm(self, question, cb):
@@ -573,13 +609,40 @@ class Window(Gtk.ApplicationWindow):
             elif e[0] == "login":
                 self.ask_login(e[1])
             return
-        for v in self.views.values():
-            v.refresh(e)
-        if e in ("player", "video", "queue", "tracks", "options"):
-            self._update_controls()
+        if e == "moved":
+            self._tick()
+            return
         if e == "video":
             cur = self.core.current
             self.set_title(f"{cur['title']} · drishya" if cur else "drishya")
+        # What isn't on screen waits: a seek rebuilt every row of every tab,
+        # with the window closed too. _catch_up does it when it's looked at.
+        visible = self.get_visible()
+        for name, v in self.views.items():
+            if e in v.events:
+                if visible and name == self.tab:
+                    v.refresh(e)
+                else:
+                    self.stale[name] = e
+        if not visible:
+            self.controls_stale = True
+        elif e in ("player", "video", "queue", "tracks", "options"):
+            self._update_controls()
+
+    def _catch_up(self):
+        if not self.get_visible():
+            return
+        if self.tab in self.stale:
+            self.views[self.tab].catch_up(self.stale.pop(self.tab))
+        if self.controls_stale:
+            self.controls_stale = False
+            self._update_controls()
+
+    def _visibility(self):
+        self._catch_up()
+        self._sync_timer()
+        if self.get_visible():
+            self.read_levels()
 
     def _update_controls(self):
         c = self.core
@@ -606,16 +669,39 @@ class Window(Gtk.ApplicationWindow):
         self.progress.set_range(0, max(1, d))
         self.tlen.set_text(fmt_time(d) if d else "–:––")
         self._tick()
+        self._sync_timer()
+
+    def _moving(self):
+        c = self.core
+        return self.get_visible() and c.current is not None and not c.paused and not c.idle
+
+    def _sync_timer(self):
+        """The clock runs only while there's something moving to show."""
+        if self.tick_id is None and self._moving():
+            self.tick_id = GLib.timeout_add(250, self._timer)
+
+    def _timer(self):
+        if not self._moving():
+            self.tick_id = None
+            return False
+        self._tick()
+        return True
 
     def _tick(self):
         c = self.core
         if not self.get_visible():
-            return True
+            return
         t = c.pos if c.current else 0
-        self.progress.set_value(t)
-        self.tcur.set_text(fmt_time(t))
-        self.views["watch"].tick(t)
-        return True
+        if self.tab == "watch":
+            self.views["watch"].tick(t)
+            return
+        # A redraw only when the handle would move a pixel or the clock changes.
+        width = self.progress.get_width()
+        if not width or abs(t - self.progress.get_value()) * width >= self.progress.get_adjustment().get_upper():
+            self.progress.set_value(t)
+        text = fmt_time(t)
+        if text != self.tcur.get_text():
+            self.tcur.set_text(text)
 
     # ------------------------------------------------------------ thumbnails
     def thumb(self, it):
@@ -663,12 +749,23 @@ class Window(Gtk.ApplicationWindow):
 
     # ------------------------------------------------------------ visibility
     def show_window(self):
+        self.shown_at = time.monotonic()
         self.set_visible(True)
         self.present()
         self.root.grab_focus()
         self.core.window_visible = True
         GLib.idle_add(lambda: (self.views["watch"].area.attach(), False)[1])
         self._tick()
+
+    def bring_back(self):
+        """Open but not focused: unmap and map it again, which every compositor
+        focuses and puts on the current workspace (present() alone only marks
+        it urgent on sway). Nothing pauses: this isn't a hide."""
+        was_full = self.fullscreened
+        self.set_visible(False)
+        self.show_window()
+        if was_full:
+            self.fullscreen()
 
     def hide_window(self):
         self.drop_pending()
@@ -691,7 +788,43 @@ class Window(Gtk.ApplicationWindow):
             self.toast(f"Can't change the {what} here (needs {'pactl' if what == 'volume' else 'brightnessctl'})")
             return
         glyph = G["vol"] if what == "volume" else G["sun"]
-        self.feedback(f"{glyph} {v}%")
+        if self.tab == "watch" and not self.fullscreened:
+            self.views["watch"].level(what, v)
+            self.views["watch"].poke()
+        else:
+            self.feedback(f"{glyph} {v}%")
+
+    def set_level(self, what, v):
+        """A slider moved: set the volume or brightness there. pactl and
+        brightnessctl run on a worker, the latest value wins."""
+        self.level_want[what] = int(v)
+        if what in self.level_busy:
+            return
+        self.level_busy.add(what)
+        a = self.core.sys_volume if what == "volume" else self.core.sys_brightness
+
+        def work():
+            done = None
+            while self.level_want.get(what) != done:
+                done = self.level_want[what]
+                a.to(done)
+            return done
+
+        def then(v):
+            self.level_busy.discard(what)
+            if v is not None and self.tab == "watch":
+                self.views["watch"].level(what, v)
+        self.core.bg(work, then, lambda e: self.level_busy.discard(what))
+
+    def read_levels(self):
+        """The sliders' starting points (pactl and brightnessctl, on a worker)."""
+        c = self.core
+
+        def then(vals):
+            for what, v in vals.items():
+                self.views["watch"].show_level(what, v)
+        c.bg(lambda: {"volume": c.sys_volume.current(), "brightness": c.sys_brightness.current()}, then,
+             lambda e: None)
 
     # ------------------------------------------------------------ keys
     def _key(self, ctrl, keyval, code, state):
@@ -1066,6 +1199,8 @@ class Window(Gtk.ApplicationWindow):
             c.add_url(arg, "play")
         elif cmd == "add":
             c.add_url(arg, "end")
+        elif cmd == "layout":
+            self.set_layout(arg) if arg else self.cycle_layout()
         elif cmd == "seek":
             m = re.fullmatch(r"([+-])?(?:(\d+):)?(?:(\d+):)?(\d+)", arg)
             if not m:
@@ -1127,9 +1262,9 @@ class Window(Gtk.ApplicationWindow):
         elif cmd in ("dl", "download"):
             if c.current:
                 c.download(c.current)
-        elif cmd in ("q", "hide"):
+        elif cmd == "hide":
             self.hide_window()
-        elif cmd in ("qa", "quit"):
+        elif cmd in ("q", "q!", "qa", "qa!", "quit", "close"):   # :q quits, as in vim
             self.app.quit_all()
         elif cmd == "help":
             self.k_keysheet()

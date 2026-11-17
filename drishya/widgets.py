@@ -80,6 +80,7 @@ def texture(path, w, h):
     """A texture of an image file, cropped to w:h and scaled (cached)."""
     key = (path, w, h)
     if key in _textures:
+        _textures[key] = _textures.pop(key)   # the newest last: the oldest go first
         return _textures[key]
     try:
         pb = GdkPixbuf.Pixbuf.new_from_file(path)
@@ -92,8 +93,8 @@ def texture(path, w, h):
         cw, ch = pw, pw * h // w
     pb = pb.new_subpixbuf((pw - cw) // 2, (ph - ch) // 2, cw, ch).scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
     t = Gdk.Texture.new_for_pixbuf(pb)
-    if len(_textures) > 400:
-        _textures.clear()
+    if len(_textures) >= 400:
+        del _textures[next(iter(_textures))]
     _textures[key] = t
     return t
 
@@ -133,16 +134,21 @@ class RowList(Gtk.ScrolledWindow):
     """A scrolling list of selectable rows and section headers. Selection
     is ours (vim keys), not GTK's: sel is an index into the items."""
 
-    def __init__(self, on_activate=None, on_select=None, row_height=54):
+    def __init__(self, on_activate=None, on_select=None, row_height=54, horizontal=False):
         super().__init__(hexpand=True, vexpand=True)
-        self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.inner = box(vertical=True, cls="list")
+        self.horizontal = horizontal   # a shelf of cards, side by side (j k still move)
+        if horizontal:
+            self.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        else:
+            self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.inner = box(vertical=not horizontal, spacing=10 if horizontal else 0, cls="list shelf" if horizontal else "list")
         self.set_child(self.inner)
         self.items, self.widgets = [], []
         self.sel, self.vstart = 0, None
         self.on_activate, self.on_select = on_activate, on_select
         self.placeholder = None
         self.row_height = row_height
+        self.painted = {"sel": set(), "vis": set()}
 
     def set_rows(self, rows, keep=True, empty=None):
         """rows: [("header", widget) | ("item", data, widget)]."""
@@ -153,6 +159,7 @@ class RowList(Gtk.ScrolledWindow):
             self.inner.remove(child)
             child = nxt
         self.items, self.widgets = [], []
+        self.painted = {"sel": set(), "vis": set()}
         for r in rows:
             if r[0] == "header":
                 self.inner.append(r[1])
@@ -187,10 +194,15 @@ class RowList(Gtk.ScrolledWindow):
         return list(range(lo, hi + 1))
 
     def _paint(self):
-        rng = set(self.range()) if self.vstart is not None else set()
-        for i, w in enumerate(self.widgets):
-            (w.add_css_class if i == self.sel else w.remove_css_class)("sel")
-            (w.add_css_class if i in rng else w.remove_css_class)("vis")
+        """Touches only the rows that change: this runs on every j and k."""
+        want = {"sel": {self.sel} if self.widgets else set(),
+                "vis": set(self.range()) if self.vstart is not None else set()}
+        for cls, rows in want.items():
+            for i in self.painted[cls] - rows:
+                self.widgets[i].remove_css_class(cls)
+            for i in rows - self.painted[cls]:
+                self.widgets[i].add_css_class(cls)
+        self.painted = want
 
     def select(self, i, scroll=True):
         if not self.items:
@@ -219,8 +231,10 @@ class RowList(Gtk.ScrolledWindow):
         ok, rect = w.compute_bounds(self.inner)
         if not ok:
             return False
-        adj = self.get_vadjustment()
-        top, bot = rect.get_y(), rect.get_y() + rect.get_height()
+        if self.horizontal:
+            adj, top, bot = self.get_hadjustment(), rect.get_x(), rect.get_x() + rect.get_width()
+        else:
+            adj, top, bot = self.get_vadjustment(), rect.get_y(), rect.get_y() + rect.get_height()
         if top - 36 < adj.get_value():
             adj.set_value(max(0, top - 36))
         elif bot + 12 > adj.get_value() + adj.get_page_size():
@@ -290,7 +304,7 @@ class Timeline(Gtk.DrawingArea):
         self.add_css_class("timeline")
         self.on_seek, self.on_hover = on_seek, on_hover
         self.duration = self.pos = self.buffered = 0.0
-        self.chapters = []
+        self.chapters, self.raw_chapters = [], None
         self.hover_x = None
         self.colors = {"played": (0.92, 0.44, 0.57), "rest": (1, 1, 1, 0.30), "buf": (1, 1, 1, 0.50)}
         self.set_draw_func(self._draw)
@@ -310,8 +324,17 @@ class Timeline(Gtk.DrawingArea):
         self.colors["played"] = rgb
 
     def update(self, duration, pos, buffered, chapters):
-        self.duration, self.pos, self.buffered = duration or 0.0, pos or 0.0, buffered or 0.0
-        self.chapters = [c.get("time", 0) for c in chapters or [] if c.get("time", 0) > 0.5]
+        duration, pos, buffered = duration or 0.0, pos or 0.0, buffered or 0.0
+        same = chapters is self.raw_chapters and duration == self.duration
+        width = self.get_width()
+        if same and width:   # a redraw only when something would move a pixel
+            step = duration / width
+            if abs(pos - self.pos) < step and abs(buffered - self.buffered) < step:
+                return
+        if chapters is not self.raw_chapters:
+            self.raw_chapters = chapters
+            self.chapters = [c.get("time", 0) for c in chapters or [] if c.get("time", 0) > 0.5]
+        self.duration, self.pos, self.buffered = duration, pos, buffered
         self.queue_draw()
 
     def time_at(self, x):
@@ -371,3 +394,105 @@ class Timeline(Gtk.DrawingArea):
             cr.set_source_rgb(*self.colors["played"])
             cr.arc(played * w, h / 2, 7, 0, 2 * math.pi)
             cr.fill()
+
+
+class Ring(Gtk.DrawingArea):
+    """The loading animation: an arc that turns while there's nothing to
+    measure (asking YouTube), then a ring that fills as the first seconds of
+    video come in. Its colour is the CSS colour of .ring (the theme's
+    accent). It animates only while it's on screen."""
+
+    def __init__(self, size=72):
+        super().__init__(content_width=size, content_height=size, halign=Gtk.Align.CENTER,
+                         valign=Gtk.Align.CENTER, can_target=False)
+        self.add_css_class("ring")
+        self.fill = None          # None: turning; 0..1: how full
+        self.shown = 0.0          # the fill as drawn, easing towards fill
+        self.tick = None
+        self.t0 = GLib.get_monotonic_time()
+        self.set_draw_func(self._draw)
+        self.connect("map", lambda *_: self._start())
+        self.connect("unmap", lambda *_: self._stop())
+
+    def set_fill(self, fill):
+        if fill is not None and self.fill is None:
+            self.shown = 0.0
+        self.fill = fill
+
+    def _start(self):
+        if self.tick is None:
+            self.tick = self.add_tick_callback(self._frame)
+
+    def _stop(self):
+        if self.tick is not None:
+            self.remove_tick_callback(self.tick)
+            self.tick = None
+
+    def _frame(self, *_):
+        if self.fill is not None:
+            self.shown += (self.fill - self.shown) * 0.12
+        self.queue_draw()
+        return GLib.SOURCE_CONTINUE
+
+    def _draw(self, _area, cr, w, h):
+        import math
+        t = (GLib.get_monotonic_time() - self.t0) / 1e6
+        cx, cy, r = w / 2, h / 2, min(w, h) / 2 - 4
+        cr.set_line_width(4.5)
+        cr.set_line_cap(1)        # round
+        cr.set_source_rgba(1, 1, 1, 0.14)
+        cr.arc(cx, cy, r, 0, 2 * math.pi)
+        cr.stroke()
+        c = self.get_color()
+        cr.set_source_rgba(c.red, c.green, c.blue, 1)
+        if self.fill is None:     # turning, the arc breathing in and out
+            start = t * 2 * math.pi / 1.3
+            span = math.pi * (0.55 + 0.4 * math.sin(t * 2.4))
+        else:                     # filling from the top, with a slow glint going round
+            start = -math.pi / 2
+            span = max(0.04, min(1.0, self.shown)) * 2 * math.pi
+        cr.arc(cx, cy, r, start, start + span)
+        cr.stroke()
+        if self.fill is not None:
+            a = t * 2 * math.pi / 2.2
+            cr.set_source_rgba(1, 1, 1, 0.55)
+            cr.arc(cx + r * math.cos(a), cy + r * math.sin(a), 2.2, 0, 2 * math.pi)
+            cr.fill()
+
+
+class Loader(Gtk.Overlay):
+    """The loading screen over the video, from pressing play until the
+    picture moves: the video's thumbnail dimmed behind a Ring, its title,
+    and what it's waiting for. A stall while playing shows only the ring
+    over the paused picture."""
+
+    def __init__(self):
+        super().__init__(hexpand=True, vexpand=True, can_target=False, visible=False)
+        self.add_css_class("loader")
+        self.set_overflow(Gtk.Overflow.HIDDEN)
+        self.backdrop = Gtk.Picture(can_shrink=True, content_fit=Gtk.ContentFit.COVER)
+        self.backdrop.add_css_class("loader-backdrop")
+        self.set_child(self.backdrop)
+        scrim = Gtk.Box(hexpand=True, vexpand=True)
+        scrim.add_css_class("loader-scrim")
+        self.add_overlay(scrim)
+        self.ring = Ring()
+        self.title = label("", "loader-title", xalign=0.5, wrap=True, lines=2, max_width_chars=52,
+                           justify=Gtk.Justification.CENTER)
+        self.note = label("", "loader-note", xalign=0.5, ellipsize=False)
+        self.add_overlay(box(self.ring, self.title, self.note, vertical=True, spacing=10, halign=Gtk.Align.CENTER,
+                             valign=Gtk.Align.CENTER))
+        self.thumb_path = None
+
+    def show_stage(self, stage, title, note, thumb_path, fill):
+        stalled = stage == "stalled"
+        (self.add_css_class if stalled else self.remove_css_class)("stalled")
+        self.backdrop.set_visible(not stalled)
+        if thumb_path != self.thumb_path:
+            self.thumb_path = thumb_path
+            self.backdrop.set_paintable(texture(thumb_path, 640, 360) if thumb_path else None)
+        if self.title.get_text() != (title or ""):
+            self.title.set_text(title or "")
+        self.title.set_visible(bool(title) and not stalled)
+        self.note.set_text(note)
+        self.ring.set_fill(fill)

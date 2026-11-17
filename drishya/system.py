@@ -87,6 +87,19 @@ class Adjust:
         self.now = self.ctl.set(cur + delta)
         return self.now
 
+    def to(self, pct):
+        """Sets it to pct (as change() does: remembered, put back later)."""
+        if not self.ctl.available():
+            return None
+        cur = self.now if self.now is not None else self.ctl.get()
+        return None if cur is None else self.change(int(pct) - cur)
+
+    def current(self):
+        """Its level now, or None when it can't be read or changed here."""
+        if not self.ctl.available():
+            return None
+        return self.now if self.now is not None else self.ctl.get()
+
     def restore(self):
         """Back to how it was; True when there was something to put back."""
         if self.before is None:

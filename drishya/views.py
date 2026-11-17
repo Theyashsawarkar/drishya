@@ -9,7 +9,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk
 
 from . import config, library, store, youtube
 from .util import fmt_time, track_name
-from .widgets import G, RowList, Timeline, VideoArea, box, fmt_bytes, label, thumb_widget
+from .widgets import G, Loader, RowList, Timeline, VideoArea, box, fmt_bytes, label, thumb_widget
 
 TW, TH = 144, 81          # list thumbnails, 16:9
 ROW_H = 95
@@ -47,6 +47,7 @@ def empty(glyph, text):
 class View:
     name = title = glyph = ""
     hints = []
+    events = ()     # the core events refresh() acts on
 
     def __init__(self, win):
         self.win, self.core = win, win.core
@@ -66,6 +67,10 @@ class View:
 
     def shown(self):
         pass
+
+    def catch_up(self, event):
+        """Its events came while it wasn't on screen; event is the last one."""
+        self.refresh(event)
 
     def play(self, *items):
         """Plays items now (the rest after the first) and goes to the video."""
@@ -122,7 +127,10 @@ class Watch(View):
     timeline with chapters and preview frames, and on the side what's next,
     the chapters and the details. Fullscreen is zen: just the video."""
     name, title, glyph = "watch", "Watch", G["watch"]
-    hints = [("p", "play"), ("h l", "±5 s"), ("Q", "settings"), ("Tab", "side"), ("f", "fullscreen"), ("Space", "more")]
+    hints = [("p", "play"), (", .", "±10 s"), ("= -", "volume"), ("C-= C--", "brightness"), ("Q", "settings"),
+             ("f", "fullscreen"), ("Space", "more")]
+    events = ("video", "player", "buffering", "history", "tracks", "options", "queue", "thumbs", "downloads", "loading")
+    chip_facts = None     # what the chips were last built from
     SIDES = ["next", "chapters", "info"]
 
     def __init__(self, win):
@@ -138,6 +146,22 @@ class Watch(View):
         self.center = label("", "glyph center-glyph", xalign=0.5, ellipsize=False, halign=Gtk.Align.CENTER,
                             valign=Gtk.Align.CENTER, can_target=False)
         self.over.add_overlay(self.center)
+        # the loading screen: shown a moment after play is pressed (a local
+        # file is there before it would blink), kept up at least LOADER_MIN
+        self.loader = Loader()
+        self.over.add_overlay(self.loader)
+        self.loader_show = self.loader_hide = None
+        self.loader_since = 0.0
+        # volume / brightness: the level, while it changes
+        self.lv_icon = label("", ellipsize=False)
+        self.lv_bar = Gtk.LevelBar(min_value=0, max_value=100, valign=Gtk.Align.CENTER)
+        self.lv_bar.add_css_class("level-bar")
+        self.lv_pct = label("", ellipsize=False)
+        self.lv = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, halign=Gtk.Align.CENTER,
+                               valign=Gtk.Align.START, can_target=False, transition_duration=150)
+        self.lv.set_child(box(self.lv_icon, self.lv_bar, self.lv_pct, spacing=10, cls="level"))
+        self.over.add_overlay(self.lv)
+        self.lv_timer = None
 
         # top: what it is
         self.v_title = label("", "v-title")
@@ -154,18 +178,64 @@ class Watch(View):
         self.pp = self._btn(G["play"], "Play / pause  (p)", c.toggle, big=True)
         self.t_now = label("", "v-time", ellipsize=False)
         self.chap = label("", "v-chapter")
-        self.volb = self._btn(G["vol"], "Mute  (m)", c.mute)
+        self.volb = self._btn(G["vol"], "Mute the video  (m)", c.mute)
         self.ccb = self._btn("CC", "Subtitles  (c)", c.cycle_subs)
         self.fullb = self._btn(G["full"], "Fullscreen  (f)", win.toggle_fullscreen)
-        row = box(self.pp, self._btn(G["next"], "Next video  (>)", c.next), self.volb, self.t_now, self.chap,
-                  Gtk.Box(hexpand=True), self.ccb,
+        step = lambda: c.conf["seek_step"]
+        seek = lambda d: (c.seek(d), win.feedback(f"{G['fwd'] if d > 0 else G['back']} {abs(d)} s"))
+        # the system's volume and the screen's brightness (as = - and Ctrl+= Ctrl+- change them)
+        self.sliders = {}
+        levels = []
+        for what, glyph, tip in (("volume", G["vol"], "Volume  (= louder, - quieter)"),
+                                 ("brightness", G["sun"], "Brightness  (Ctrl+= brighter, Ctrl+- dimmer)")):
+            sc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+            sc.set_draw_value(False)
+            sc.set_focusable(False)
+            sc.add_css_class("vslide")
+            sc.set_tooltip_text(tip)
+            sc.connect("change-value", lambda _s, _t, v, w=what: (win.set_level(w, v), False)[1])
+            pct = label("", "v-level", ellipsize=False)
+            icon = label(glyph, "v-level-icon", ellipsize=False, tooltip_text=tip)
+            part = box(icon if what == "brightness" else self.volb, sc, pct, spacing=4)
+            self.sliders[what] = (sc, pct, part)
+            levels.append(part)
+        self.ctl_spacer = Gtk.Box(hexpand=True)
+        row = box(self._btn(G["prev"], "Previous video  (<)", c.prev),
+                  self._btn(G["back"], "Back 10 seconds  (,)", lambda: seek(-step())), self.pp,
+                  self._btn(G["fwd"], "Forward 10 seconds  (.)", lambda: seek(step())),
+                  self._btn(G["next"], "Next video  (>)", c.next), *levels, self.t_now, self.chap,
+                  self.ctl_spacer, self.ccb,
                   self._btn(G["speed"], "Settings: quality, speed, subtitles, audio  (Q)", win.open_settings),
                   self._btn(G["theater"], "Theater mode  (t)", win.toggle_theater),
                   self._btn(G["pip"], "Mini player  (z)", win.app.show_mini), self.fullb, spacing=4)
         self.bottom = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, valign=Gtk.Align.END,
                                    transition_duration=180)
-        self.bottom.set_child(box(self.timeline, row, vertical=True, spacing=2, cls="v-bottom"))
+        row.add_css_class("ctl-row")
+        self.ctl_row = row
+        self.controls = box(self.timeline, row, vertical=True, spacing=2, cls="v-bottom")
+        self.bottom.set_child(self.controls)
         self.over.add_overlay(self.bottom)
+
+        # Glass: volume and brightness as bars on the video's right and left edges
+        self.edges = {}
+        for what, glyph, side in (("brightness", G["sun"], Gtk.Align.START), ("volume", G["vol"], Gtk.Align.END)):
+            sc = Gtk.Scale.new_with_range(Gtk.Orientation.VERTICAL, 0, 100, 1)
+            sc.set_inverted(True)
+            sc.set_draw_value(False)
+            sc.set_focusable(False)
+            sc.set_vexpand(True)
+            sc.add_css_class("edge-scale")
+            sc.set_tooltip_text("Volume  (= louder, - quieter)" if what == "volume" else "Brightness  (Ctrl+= brighter, Ctrl+- dimmer)")
+            sc.connect("change-value", lambda _s, _t, v, w=what: (win.set_level(w, v), False)[1])
+            pct = label("", "edge-pct", ellipsize=False, xalign=0.5)
+            col = box(label(glyph, "edge-icon", ellipsize=False, xalign=0.5), sc, pct, vertical=True, spacing=6, cls="edge")
+            col.set_size_request(-1, 230)
+            rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, halign=side, valign=Gtk.Align.CENTER,
+                               transition_duration=180, visible=False)
+            rev.set_child(col)
+            self.over.add_overlay(rev)
+            self.edges[what] = (rev, sc, pct)
+        self.level_ok = {"volume": True, "brightness": True}
 
         # the timeline's preview frame
         self.pv_pic = Gtk.Picture(can_shrink=True, content_fit=Gtk.ContentFit.COVER)
@@ -214,6 +284,8 @@ class Watch(View):
         self.auto_chip = label("", "chip", ellipsize=False)
         tabs.append(self.auto_chip)
         self.upnext = RowList(on_activate=lambda it: c.play_index(c.queue.index(it)), row_height=62)
+        # the dock layout's Up next: cards side by side under the controls
+        self.shelf = RowList(on_activate=lambda it: c.play_index(c.queue.index(it)), horizontal=True)
         self.chapters = RowList(on_activate=lambda ch: c.seek_to(ch.get("time", 0)), row_height=40)
         self.info = label("", "info", wrap=True, width_chars=38, max_width_chars=44, selectable=True,
                           valign=Gtk.Align.START, hexpand=True)
@@ -222,13 +294,69 @@ class Watch(View):
         info_sc.set_child(box(self.info, cls="info-box"))
         self.side_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, vexpand=True)
         self.side_stack.add_named(self.upnext, "next")
+        self.side_stack.add_named(self.shelf, "shelf")
         self.side_stack.add_named(self.chapters, "chapters")
         self.side_stack.add_named(info_sc, "info")
         self.side = box(tabs, self.side_stack, vertical=True, cls="side")
-        self.side.set_size_request(360, -1)
-        self.side.set_hexpand(False)
-        self.widget = box(self.over, self.side)
-        self.set_side("next")
+        # the video and, in the dock and study layouts, the controls under it
+        self.dock = box(cls="dock", visible=False)
+        self.col = box(self.over, self.dock, vertical=True, hexpand=True, vexpand=True)
+        self.widget = box(self.col, self.side)
+        self.layout, self.theater_on, self.glass_side = None, False, False
+        self.set_layout("cinema")
+
+    # ------------------------------------------------------------ the four layouts
+    LAYOUTS = {"cinema": "Cinema", "dock": "Theater dock", "glass": "Glass", "study": "Study split"}
+
+    def set_layout(self, name):
+        """cinema: controls over the video (they fade), Up next on the right.
+        dock: controls in a dock under the video (always there), Up next as
+        cards below. glass: the video edge to edge, a floating pill, volume and
+        brightness on the edges, Tab slides the side in. study: the video and
+        a dock on the left, chapters and details big on the right."""
+        if name not in self.LAYOUTS:
+            name = "cinema"
+        old, self.layout = self.layout, name
+        docked = name in ("dock", "study")
+        here = self.controls.get_parent()
+        if docked and here is not self.dock:
+            self.bottom.set_child(None)
+            self.dock.append(self.controls)
+        elif not docked and here is not self.bottom:
+            if here is not None:
+                here.remove(self.controls)
+            self.bottom.set_child(self.controls)
+        self.dock.set_visible(docked and not self.win.fullscreened)
+        for n in self.LAYOUTS:
+            (self.widget.add_css_class if n == name else self.widget.remove_css_class)("layout-" + n)
+        (self.controls.add_css_class if docked else self.controls.remove_css_class)("docked")
+        (self.controls.add_css_class if name == "glass" else self.controls.remove_css_class)("glass")
+        self.ctl_row.set_halign(Gtk.Align.CENTER if name == "glass" else Gtk.Align.FILL)
+        self.ctl_spacer.set_visible(name != "glass")
+        self.widget.set_orientation(Gtk.Orientation.VERTICAL if name == "dock" else Gtk.Orientation.HORIZONTAL)
+        if name == "dock":
+            self.side.set_size_request(-1, 236)
+            self.side.set_hexpand(True)
+            self.side.set_vexpand(False)
+        else:
+            self.side.set_size_request(460 if name == "study" else 360, -1)
+            self.side.set_hexpand(name == "study")
+            self.side.set_vexpand(True)
+        for what in ("volume", "brightness"):
+            self.sliders[what][2].set_visible(name != "glass" and self.level_ok[what])
+            self.edges[what][0].set_visible(name == "glass" and self.level_ok[what])
+        if docked:
+            self.bottom.set_reveal_child(False)
+        if name == "study" and old != "study" and self.core.chapters:
+            self.side_tab = "chapters"
+        self.set_side(self.side_tab if hasattr(self, "side_tab") else "next")
+        self._side_shown()
+        self.refresh("queue")
+        self.poke()
+
+    def _side_shown(self):
+        hidden = self.theater_on or (self.layout == "glass" and not self.glass_side)
+        self.side.set_visible(not hidden)
 
     # ------------------------------------------------------------ building
     def _btn(self, glyph, tip, cb, big=False):
@@ -249,14 +377,14 @@ class Watch(View):
 
     def list(self):
         if self.side_tab == "next":
-            return self.upnext
+            return self.shelf if self.layout == "dock" else self.upnext
         if self.side_tab == "chapters":
             return self.chapters
         return None
 
     def set_side(self, name):
         self.side_tab = name
-        self.side_stack.set_visible_child_name(name)
+        self.side_stack.set_visible_child_name("shelf" if name == "next" and self.layout == "dock" else name)
         for n, b in self.side_btns.items():
             (b.add_css_class if n == name else b.remove_css_class)("act")
         if name == "info":
@@ -264,7 +392,8 @@ class Watch(View):
             self._fill_info()
 
     def set_theater(self, on):
-        self.side.set_visible(not on)
+        self.theater_on = on
+        self._side_shown()
 
     # ------------------------------------------------------------ showing the controls
     def poke(self, secs=2.5):
@@ -273,7 +402,9 @@ class Watch(View):
         if self.win.fullscreened:
             return
         self.top.set_reveal_child(self.core.current is not None)
-        self.bottom.set_reveal_child(True)
+        self.bottom.set_reveal_child(self.layout not in ("dock", "study"))
+        for rev, _sc, _pct in self.edges.values():
+            rev.set_reveal_child(self.layout == "glass")
         if self.hide_timer:
             GLib.source_remove(self.hide_timer)
         self.hide_timer = GLib.timeout_add(int(secs * 1000), self._fade)
@@ -284,6 +415,8 @@ class Watch(View):
         if self.win.fullscreened or (c.current is not None and not c.paused and not c.idle and not self.hovering_controls):
             self.top.set_reveal_child(False)
             self.bottom.set_reveal_child(False)
+            for rev, _sc, _pct in self.edges.values():
+                rev.set_reveal_child(False)
             self.preview.set_visible(False)
         elif self.hovering_controls:
             self.hide_timer = GLib.timeout_add(1500, self._fade)
@@ -307,7 +440,10 @@ class Watch(View):
 
     def enter_zen(self, on):
         self.top.set_reveal_child(False if on else self.core.current is not None)
-        self.bottom.set_reveal_child(not on)
+        self.bottom.set_reveal_child(not on and self.layout not in ("dock", "study"))
+        self.dock.set_visible(not on and self.layout in ("dock", "study"))
+        for rev, _sc, _pct in self.edges.values():
+            rev.set_reveal_child(False)
         self.preview.set_visible(False)
         self.set_theater(on or self.win.theater)
         if not on:
@@ -361,23 +497,104 @@ class Watch(View):
     # ------------------------------------------------------------ refreshing
     def tick(self, t):
         c = self.core
+        if self.loader.get_visible() and c.stage in ("buffering", "stalled"):
+            self.loader.ring.set_fill(min(1.0, c.buffered / 5.0))
         self.timeline.update(c.duration, t, c.buffered, c.chapters)
         d = c.duration
-        self.t_now.set_text(f"{fmt_time(t)} / {fmt_time(d)}" if d else (fmt_time(t) if c.current else ""))
+        text = f"{fmt_time(t)} / {fmt_time(d)}" if d else (fmt_time(t) if c.current else "")
+        if text != self.t_now.get_text():
+            self.t_now.set_text(text)
         ch = self._chapter_at(t)
-        self.chap.set_text(f"· {ch}" if ch else "")
+        text = f"· {ch}" if ch else ""
+        if text != self.chap.get_text():
+            self.chap.set_text(text)
+
+    def catch_up(self, event):
+        self.refresh(None)   # whatever was missed, not only the last event
+        if self.core.paused:
+            self.poke(30)    # paused: the controls stay
+
+    # ------------------------------------------------------------ the loading screen
+    LOADER_MIN = 0.45        # once up, at least this long: it never blinks
+
+    def _loading(self):
+        c, cur = self.core, self.core.current
+        stage = c.stage if cur is not None else None
+        if stage is None:
+            if self.loader_show:
+                GLib.source_remove(self.loader_show)
+                self.loader_show = None
+            if self.loader.get_visible() and not self.loader_hide:
+                wait = max(0.12, self.loader_since + self.LOADER_MIN - time.monotonic())
+                self.loader_hide = GLib.timeout_add(int(wait * 1000), self._loader_off)
+            return
+        if self.loader_hide:
+            GLib.source_remove(self.loader_hide)
+            self.loader_hide = None
+        online = bool(cur.get("yt") or cur.get("url")) and not c.downloaded(cur)
+        note = {"finding": "Asking YouTube…" if cur.get("yt") and online else "Opening…",
+                "buffering": "Buffering…", "stalled": "Buffering · the connection is slow"}[stage]
+        self.loader.show_stage(stage, cur.get("title"), note, self.win.thumb(cur) if stage != "stalled" else None,
+                               None if stage == "finding" else min(1.0, c.buffered / 5.0))
+        if not self.loader.get_visible() and not self.loader_show:
+            if stage == "finding" and online:
+                self._loader_on()      # it'll take a while: at once, so nothing blinks in between
+            else:                      # a file may be there first: only if it isn't
+                self.loader_show = GLib.timeout_add(500 if stage == "stalled" else 150, self._loader_on)
+
+    def _loader_on(self):
+        self.loader_show = None
+        if self.core.stage is not None:
+            self.loader.set_visible(True)
+            self.loader_since = time.monotonic()
+        return False
+
+    def _loader_off(self):
+        self.loader_hide = None
+        if self.core.stage is None:
+            self.loader.set_visible(False)
+        return False
+
+    # ------------------------------------------------------------ volume and brightness
+    def level(self, what, v):
+        """Shows a new volume or brightness: the pill over the video and the slider."""
+        self.lv_icon.set_text(G["vol"] if what == "volume" else G["sun"])
+        self.lv_bar.set_value(v)
+        self.lv_pct.set_text(f"{v}%")
+        self.lv.set_reveal_child(True)
+        if self.lv_timer:
+            GLib.source_remove(self.lv_timer)
+        self.lv_timer = GLib.timeout_add(1200, self._level_off)
+        self.show_level(what, v)
+
+    def show_level(self, what, v):
+        sc, pct, part = self.sliders[what]
+        rev, esc, epct = self.edges[what]
+        self.level_ok[what] = v is not None or what == "volume"   # no brightnessctl, or no backlight: no slider
+        part.set_visible(self.layout != "glass" and self.level_ok[what])
+        rev.set_visible(self.layout == "glass" and self.level_ok[what])
+        if v is None:
+            return
+        for s, p in ((sc, pct), (esc, epct)):
+            s.set_value(v)
+            p.set_text(f"{v}%")
+
+    def _level_off(self):
+        self.lv_timer = None
+        self.lv.set_reveal_child(False)
+        return False
 
     def refresh(self, event=None):
         c = self.core
         cur = c.current
-        if event in (None, "video", "player", "buffering"):
+        if event in (None, "video", "loading"):
+            self._loading()
+        if event in (None, "video", "player", "buffering", "loading"):
             self.idle.set_visible(cur is None or (c.idle and not c.render_ready))
             if c.player_error:
                 self.idle.get_last_child().set_text(f"Can't play video: {c.player_error}")
             glyph = ""
-            if cur is not None and c.buffering:
-                glyph = G["radio"]
-            elif cur is not None and c.paused and not c.idle and not self.win.fullscreened:
+            if cur is not None and c.paused and not c.idle and c.stage is None and not self.win.fullscreened:
                 glyph = G["pause"]
             self.center.set_text(glyph)
             self.center.set_visible(bool(glyph))
@@ -397,7 +614,10 @@ class Watch(View):
                 self.v_meta.set_text(" · ".join(p for p in parts if p))
             if self.side_tab == "info":
                 self._fill_info()
-        if event in (None, "video", "tracks", "player", "options"):
+        # "player" is every seek and volume step: the chips rarely change with it
+        facts = (c.current_height(), c.speed)
+        if event in (None, "video", "tracks", "options") or event == "player" and facts != self.chip_facts:
+            self.chip_facts = facts
             self._chips()
             self._chapters()
             self.auto_chip.set_text(f"autoplay {'on' if c.autoplay else 'off'} · M")
@@ -416,11 +636,18 @@ class Watch(View):
                            valign=Gtk.Align.CENTER)
                 text.get_first_child().set_ellipsize(3)
                 w = box(thumb, text, spacing=10, cls="upnext-row")
+                if self.layout == "dock":   # a card: the picture on top
+                    thumb = thumb_widget(self.win.thumb(it), 192, 108, G["yt"] if it.get("yt") else G["film"],
+                                         self.progress(it))
+                    w = box(thumb, label(it.get("title") or "?", "t", wrap=True, max_width_chars=22, lines=2),
+                            label(it.get("channel") or meta(it), "a"), vertical=True, spacing=4, cls="shelf-card")
+                    w.set_size_request(204, -1)
                 if it.get("auto"):
                     w.add_css_class("auto")
                 rows.append(("item", it, w))
             msg = ("Autoplay finds more when this ends" if c.autoplay else "Nothing next · M turns autoplay on")
-            self.upnext.set_rows(rows, empty=label(msg, "dim", xalign=0.5, wrap=True, margin_top=20))
+            (self.shelf if self.layout == "dock" else self.upnext).set_rows(
+                rows, empty=label(msg, "dim", xalign=0.5, wrap=True, margin_top=20))
 
     def _chips(self):
         c = self.core
@@ -499,7 +726,14 @@ class Watch(View):
             self.win.feedback(f"{G['fwd']} {step * n} s")
             return True
         if k == "Tab":
-            self.set_side(self.SIDES[(self.SIDES.index(self.side_tab) + 1) % len(self.SIDES)])
+            if self.layout == "glass" and not self.glass_side:     # glass: Tab slides the side in
+                self.glass_side = True
+                self.set_side("next")
+            elif self.layout == "glass" and self.side_tab == self.SIDES[-1]:   # ... and out again
+                self.glass_side = False
+            else:
+                self.set_side(self.SIDES[(self.SIDES.index(self.side_tab) + 1) % len(self.SIDES)])
+            self._side_shown()
             if self.win.theater:
                 self.win.toggle_theater()
             return True
@@ -520,6 +754,11 @@ class Watch(View):
 class Queue(View):
     name, title, glyph = "queue", "Up next", G["queue"]
     hints = [("Enter", "play"), ("dd", "remove"), ("J K", "move"), ("gp", "paste"), ("A", "play next"), ("Space", "more")]
+    events = ("queue", "video", "player", "downloads", "options", "thumbs", "history")
+    built = None     # what a "player" event can change, as the rows show it
+
+    def catch_up(self, event):
+        self.refresh(None)   # whatever was missed, not only the last event
 
     def __init__(self, win):
         super().__init__(win)
@@ -566,6 +805,11 @@ class Queue(View):
             return
         c = self.core
         q, p = c.queue, c.cur
+        # a seek or a volume step is a "player" event too
+        built = (p, len(q), c.paused, c.idle, c.duration)
+        if event == "player" and built == self.built:
+            return
+        self.built = built
         rows = []
         for i, it in enumerate(q):
             if i == 0 and p > 0:
@@ -665,6 +909,7 @@ class Library(View):
     seen. h j k l move, Enter opens or plays, Backspace goes up."""
     name, title, glyph = "library", "Library", G["lib"]
     hints = [("h j k l", "move"), ("Enter", "open / play"), ("Backspace", "up"), ("a", "add"), ("Space", "more")]
+    events = ("thumbs", "history", "downloads")
     CW, CH = 208, 117
 
     def __init__(self, win):
@@ -897,6 +1142,7 @@ class Library(View):
 class YouTube(View):
     name, title, glyph = "youtube", "YouTube", G["yt"]
     hints = [("Enter", "play"), ("a", "add"), ("A", "play next"), ("D", "download"), ("Space", "more")]
+    events = ("thumbs", "queue", "downloads", "history")
 
     def __init__(self, win):
         super().__init__(win)
@@ -989,6 +1235,7 @@ class YouTube(View):
 class History(View):
     name, title, glyph = "history", "History", G["history"]
     hints = [("Enter", "resume"), ("a", "add"), ("dd", "forget"), ("Space", "more")]
+    events = ("history", "thumbs", "downloads")
 
     def __init__(self, win):
         super().__init__(win)
@@ -1074,6 +1321,7 @@ class History(View):
 class Downloads(View):
     name, title, glyph = "downloads", "Downloads", G["dl"]
     hints = [("Enter", "play"), ("R", "retry"), ("dd", "delete"), ("x", "cancel"), ("Space", "more")]
+    events = ("downloads", "thumbs")
 
     def __init__(self, win):
         super().__init__(win)
