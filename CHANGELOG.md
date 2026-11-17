@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
-## Unreleased
+## v0.4.0 -- 2026-11-17
 
 - `:q` closes drishya instead of hiding it (it saves where you were first); `:hide` hides, and `q` / `Esc`
   still do. `drishya close` is `drishya quit`, and quit makes sure: a player that doesn't
