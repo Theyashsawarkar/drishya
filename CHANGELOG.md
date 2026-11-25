@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.p
 
 ## Unreleased
 
+- **Spatial look**: the window is graphite glass with a lit top edge and 28 px corners (sway's rule matches), rounder controls throughout; where you are is near-white (the theme's accent). Without varna, the colours are Vayu's Spatial palette.
 - The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.
 
 ## v0.4.0 -- 2026-11-17

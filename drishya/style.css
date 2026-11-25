@@ -1,32 +1,35 @@
-/* drishya: Catppuccin Mocha, glass over the compositor's blur (like Vyom and nāda).
+/* drishya: Vayu's Spatial look, glass over the compositor's blur (like Vyom and nāda):
+   graphite, very round, where you are in near-white (@mauve is the theme's
+   accent: varna maps it, this fallback is Vayu's).
    The window's background opacity comes from [drishya] opacity, appended at load. */
-@define-color text #cdd6f4;
-@define-color sub1 #bac2de;
-@define-color sub0 #a6adc8;
-@define-color ov1 #7f849c;
-@define-color ov0 #6c7086;
-@define-color s1 #45475a;
-@define-color s0 #313244;
-@define-color base #1e1e2e;
-@define-color crust #11111b;
-@define-color mauve #cba6f7;
-@define-color pink #f5c2e7;
-@define-color red #f38ba8;
-@define-color peach #fab387;
-@define-color yellow #f9e2af;
-@define-color green #a6e3a1;
-@define-color teal #94e2d5;
-@define-color sky #89dceb;
-@define-color blue #89b4fa;
-@define-color lavender #b4befe;
+@define-color text #f2f2f0;
+@define-color sub1 #cdcfd3;
+@define-color sub0 #b3b5ba;
+@define-color ov1 #80838a;
+@define-color ov0 #6a6d74;
+@define-color s1 #3a3c42;
+@define-color s0 #2a2c31;
+@define-color base #1b1c20;
+@define-color crust #0e0f11;
+@define-color mauve #f4f4f2;
+@define-color pink #f4b4cc;
+@define-color red #ff9389;
+@define-color peach #f7b07d;
+@define-color yellow #f3d47f;
+@define-color green #8ee2a6;
+@define-color teal #82ddd5;
+@define-color sky #8fd6ec;
+@define-color blue #93c4ff;
+@define-color lavender #b8c2ff;
 
 window.drishya, window.drishya-mini { background: transparent; }
 .drishya-root {
-  border-radius: 20px;
-  border: 1px solid alpha(@mauve, 0.30);
-  background-image: linear-gradient(to bottom, alpha(white, 0.06), alpha(white, 0) 35%);
+  border-radius: 28px;
+  border: 1px solid alpha(white, 0.13);
+  box-shadow: inset 0 1px 0 alpha(white, 0.14);
+  background-image: linear-gradient(to bottom, alpha(white, 0.10), alpha(white, 0.05) 30%, alpha(white, 0.04));
   color: @text;
-  font-family: "Inter", "Noto Sans", sans-serif;
+  font-family: "Adwaita Sans", "Inter", "Noto Sans", sans-serif;
   font-size: 13px;
 }
 .glyph, .mono { font-family: "JetBrainsMono Nerd Font", monospace; }
@@ -36,23 +39,23 @@ window.drishya, window.drishya-mini { background: transparent; }
 
 /* ---- top bar ---- */
 .topbar { padding: 11px 14px; border-bottom: 1px solid alpha(white, 0.06); }
-.logo { padding: 5px 12px 5px 9px; border-radius: 10px; background: alpha(@mauve, 0.16); color: @mauve; font-weight: 700; }
+.logo { padding: 5px 12px 5px 9px; border-radius: 14px; background: alpha(@mauve, 0.16); color: @mauve; font-weight: 700; }
 .logo .glyph { font-size: 14px; }
-button.tab { padding: 4px 10px; border-radius: 9px; background: none; box-shadow: none; border: none; color: @sub0; min-height: 0; }
+button.tab { padding: 4px 10px; border-radius: 12px; background: none; box-shadow: none; border: none; color: @sub0; min-height: 0; }
 button.tab:hover { background: alpha(white, 0.05); }
 button.tab.on { background: alpha(white, 0.09); color: @text; }
 .keycap { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; font-weight: 600; color: @sub1;
-  background: alpha(white, 0.07); border: 1px solid alpha(white, 0.12); border-radius: 5px; padding: 0 5px; }
-.mode { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 7px;
+  background: alpha(white, 0.07); border: 1px solid alpha(white, 0.12); border-radius: 8px; padding: 0 5px; }
+.mode { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 10px;
   background: @mauve; color: @crust; }
 .mode.visual { background: @peach; } .mode.search { background: @sky; } .mode.command { background: @yellow; } .mode.confirm { background: @red; }
 
 /* ---- lists ---- */
 .list { padding: 4px 8px 10px 10px; }
 .sect { font-size: 10.5px; font-weight: 600; letter-spacing: 1px; color: @ov0; padding: 12px 10px 5px; }
-.sect-chip { font-size: 11px; padding: 2px 9px; border-radius: 8px; background: alpha(@mauve, 0.16); color: @mauve; letter-spacing: 0; }
+.sect-chip { font-size: 11px; padding: 2px 9px; border-radius: 12px; background: alpha(@mauve, 0.16); color: @mauve; letter-spacing: 0; }
 .sect-chip.off { background: alpha(white, 0.05); color: @ov0; }
-.row { padding: 5px 8px; border-radius: 11px; border: 1px solid transparent; }
+.row { padding: 5px 8px; border-radius: 16px; border: 1px solid transparent; }
 .row:hover { background: alpha(white, 0.03); }
 .row.sel { background: alpha(@mauve, 0.13); border-color: alpha(@mauve, 0.35); }
 .row.vis { background: alpha(@peach, 0.13); border-color: alpha(@peach, 0.35); }
@@ -65,11 +68,11 @@ button.tab.on { background: alpha(white, 0.09); color: @text; }
 .row .dur { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11.5px; color: @ov1; min-width: 44px; }
 .row .grip { color: @ov0; font-family: "JetBrainsMono Nerd Font", monospace; opacity: 0; }
 .row:hover .grip, .row.sel .grip { opacity: 1; }
-button.x { background: none; box-shadow: none; border: none; color: @ov1; padding: 0 5px; min-height: 0; min-width: 0; border-radius: 6px; opacity: 0; }
+button.x { background: none; box-shadow: none; border: none; color: @ov1; padding: 0 5px; min-height: 0; min-width: 0; border-radius: 8px; opacity: 0; }
 .row:hover button.x, .row.sel button.x { opacity: 1; }
 button.x:hover { background: alpha(@red, 0.18); color: @red; }
-.tile { border-radius: 8px; color: alpha(@crust, 0.8); font-weight: 700; font-size: 12px; }
-.badge { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 6px; }
+.tile { border-radius: 12px; color: alpha(@crust, 0.8); font-weight: 700; font-size: 12px; }
+.badge { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 8px; }
 .badge.local { background: alpha(@green, 0.14); color: @green; }
 .badge.yt { background: alpha(@red, 0.14); color: @red; }
 .badge.dl { background: alpha(@sky, 0.14); color: @sky; }
@@ -83,18 +86,18 @@ button.x:hover { background: alpha(@red, 0.18); color: @red; }
 .now-artist { color: @sub0; font-size: 13px; }
 .kv-k { color: @ov1; font-size: 12px; }
 .kv-v { color: @sub1; font-size: 12px; }
-.chip { font-size: 11.5px; padding: 3px 9px; border-radius: 8px; background: alpha(white, 0.06); color: @sub1; }
+.chip { font-size: 11.5px; padding: 3px 9px; border-radius: 12px; background: alpha(white, 0.06); color: @sub1; }
 .chip.act { background: alpha(@mauve, 0.16); color: @mauve; }
-.upnext-row { padding: 4px 6px; border-radius: 9px; }
+.upnext-row { padding: 4px 6px; border-radius: 12px; }
 .upnext-row .t { font-weight: 600; font-size: 12.5px; }
 .upnext-row .a { color: @ov1; font-size: 11.5px; }
 
 /* ---- bottom bar ---- */
 .bar { padding: 10px 18px; border-top: 1px solid alpha(white, 0.06); }
-button.ctl { background: none; box-shadow: none; border: none; color: @sub1; min-width: 34px; min-height: 34px; border-radius: 10px; padding: 0; }
+button.ctl { background: none; box-shadow: none; border: none; color: @sub1; min-width: 34px; min-height: 34px; border-radius: 14px; padding: 0; }
 button.ctl:hover { background: alpha(white, 0.06); }
 button.ctl label { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 17px; }
-button.ctl.big { background: @mauve; color: @crust; min-width: 42px; min-height: 42px; border-radius: 21px; }
+button.ctl.big { background: @mauve; color: @crust; min-width: 42px; min-height: 42px; border-radius: 28px; }
 button.ctl.big label { font-size: 19px; }
 button.ctl.on { color: @mauve; }
 /* The timeline: a thin line like YouTube's; the knob shows on hover. */
@@ -111,15 +114,15 @@ scale.volume slider { min-width: 10px; min-height: 10px; margin: -4px; border-ra
 
 /* ---- status line ---- */
 .status { padding: 6px 16px; background: alpha(@crust, 0.3); border-top: 1px solid alpha(white, 0.05);
-  border-radius: 0 0 20px 20px; font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: @ov1; }
+  border-radius: 0 0 28px 28px; font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; color: @ov1; }
 text.cmdline, .cmdline { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 12px; color: @text; caret-color: @mauve; background: none; }
-.toast { color: @text; background: alpha(@crust, 0.94); border: 1px solid @s1; border-radius: 12px; padding: 9px 14px; font-size: 13px; margin-bottom: 92px; }
-.help { color: @text; background: alpha(@crust, 0.96); border: 1px solid @s1; border-radius: 16px; padding: 18px 24px; margin: 60px 24px 84px; }
+.toast { color: @text; background: alpha(@crust, 0.94); border: 1px solid @s1; border-radius: 18px; padding: 9px 14px; font-size: 13px; margin-bottom: 92px; }
+.help { color: @text; background: alpha(@crust, 0.96); border: 1px solid @s1; border-radius: 22px; padding: 18px 24px; margin: 60px 24px 84px; }
 .help .h { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: @mauve; margin-bottom: 6px; }
 .help .d { color: @sub0; font-size: 12.5px; }
 
 /* ---- search box (YouTube / library) ---- */
-.searchbox { margin: 10px 12px 4px; padding: 7px 12px; border-radius: 11px; background: alpha(white, 0.05); border: 1px solid alpha(white, 0.06); }
+.searchbox { margin: 10px 12px 4px; padding: 7px 12px; border-radius: 16px; background: alpha(white, 0.05); border: 1px solid alpha(white, 0.06); }
 .searchbox text, .searchbox { font-size: 13.5px; }
 .col { border-right: 1px solid alpha(white, 0.06); }
 .col.focus .sect { color: @mauve; }
@@ -127,7 +130,7 @@ text.cmdline, .cmdline { font-family: "JetBrainsMono Nerd Font", monospace; font
 .noscrollbar scrollbar { opacity: 0; min-width: 0; }
 
 /* ---- videos ---- */
-.thumb { border-radius: 10px; background: alpha(white, 0.05); }
+.thumb { border-radius: 14px; background: alpha(white, 0.05); }
 .thumb-glyph { font-size: 26px; color: alpha(white, 0.2); }
 progressbar.watched trough { min-height: 3px; background: alpha(white, 0.25); border-radius: 3px; }
 progressbar.watched progress { min-height: 3px; background: @red; border-radius: 3px; }
@@ -139,7 +142,7 @@ progressbar.watched progress { min-height: 3px; background: @red; border-radius:
 
 /* ---- watch: the stage and the side ---- */
 .stage { background: black; }
-.drishya-root:not(.full) .stage { border-radius: 14px; }
+.drishya-root:not(.full) .stage { border-radius: 20px; }
 .center-glyph { font-size: 64px; color: alpha(white, 0.85); background: alpha(black, 0.45); border-radius: 99px;
   padding: 18px 26px; }
 .osd { padding: 14px 22px 18px; background-image: linear-gradient(to top, alpha(black, 0.75), alpha(black, 0)); }
@@ -155,28 +158,28 @@ progressbar.osd-bar progress { min-height: 4px; border-radius: 99px; background-
 .chips { margin-top: 6px; }
 .chip.live { background: alpha(@red, 0.18); color: @red; font-weight: 700; }
 .upnext { }
-.upnext-row { padding: 5px 6px; border-radius: 10px; }
+.upnext-row { padding: 5px 6px; border-radius: 14px; }
 .upnext-row.auto .t { color: @sub1; }
 .drishya-root.full { border-radius: 0; border: none; background: black; }
 
 /* ---- mini player ---- */
 window.drishya-mini { background: transparent; }
-.mini-root { border-radius: 14px; background: black; border: 1px solid alpha(@mauve, 0.35); }
-.mini-osd { padding: 8px 12px 10px; border-radius: 0 0 14px 14px; }
+.mini-root { border-radius: 20px; background: black; border: 1px solid alpha(@mauve, 0.35); }
+.mini-osd { padding: 8px 12px 10px; border-radius: 0 0 20px 20px; }
 .mini-title { font-size: 12.5px; }
 
 
 /* ---- sign in ---- */
-.signin { background: alpha(@crust, 0.97); border: 1px solid @s1; border-radius: 16px; padding: 20px 24px; min-width: 460px; }
+.signin { background: alpha(@crust, 0.97); border: 1px solid @s1; border-radius: 22px; padding: 20px 24px; min-width: 460px; }
 .signin-title { font-size: 15px; font-weight: 700; color: @text; }
 .signin-why { color: @sub0; font-size: 12.5px; }
 .signin-glyph { font-size: 18px; color: @yellow; }
-.signin entry { padding: 6px 10px; border-radius: 10px; background: alpha(white, 0.06); border: 1px solid alpha(white, 0.08); }
+.signin entry { padding: 6px 10px; border-radius: 14px; background: alpha(white, 0.06); border: 1px solid alpha(white, 0.08); }
 .mode.signin { background: @yellow; }
 
 /* ---- quality ---- */
 .qpanel { min-width: 380px; }
-.q-row { padding: 7px 12px; border-radius: 10px; border: 1px solid transparent; }
+.q-row { padding: 7px 12px; border-radius: 14px; border: 1px solid transparent; }
 .q-row.sel { background: alpha(@mauve, 0.15); border-color: alpha(@mauve, 0.4); }
 .q-row.on { color: @sub1; }
 .q-name { font-weight: 600; font-size: 13.5px; }
@@ -186,18 +189,18 @@ button.ctl.qbtn { padding: 0 6px; }
 
 /* ===== search panel (/) ===== */
 .scrim { background: alpha(@crust, 0.45); }
-.search-panel { color: @text; background: alpha(@crust, 0.95); border: 1px solid alpha(@mauve, 0.4); border-radius: 18px;
+.search-panel { color: @text; background: alpha(@crust, 0.95); border: 1px solid alpha(@mauve, 0.4); border-radius: 24px;
   box-shadow: 0 30px 80px alpha(black, 0.55); }
 .search-top { padding: 14px 16px 10px; }
 .search-glyph { color: @mauve; font-size: 17px; }
 text.search-entry, .search-entry { font-size: 17px; color: @text; caret-color: @mauve; background: none; }
 .search-scopes { padding: 0 14px 10px; border-bottom: 1px solid alpha(white, 0.06); }
-.search-scope { padding: 4px 10px; border-radius: 8px; color: @sub0; font-weight: 600; font-size: 12px; }
+.search-scope { padding: 4px 10px; border-radius: 12px; color: @sub0; font-weight: 600; font-size: 12px; }
 .search-scope.on { background: alpha(@mauve, 0.16); color: @mauve; }
 .search-list { padding: 4px 8px 8px; }
 .search-sect { font-size: 10.5px; font-weight: 600; letter-spacing: 1px; color: @ov0; padding: 12px 10px 6px; }
 .search-note { padding: 8px 12px 14px; }
-.search-row { padding: 6px 10px; border-radius: 11px; border: 1px solid transparent; }
+.search-row { padding: 6px 10px; border-radius: 16px; border: 1px solid transparent; }
 .search-row:hover { background: alpha(white, 0.03); }
 .search-row.sel { background: alpha(@mauve, 0.13); border-color: alpha(@mauve, 0.38); }
 .search-row.top { padding: 10px 12px; background-image: linear-gradient(120deg, alpha(@mauve, 0.10), alpha(@teal, 0.04));
@@ -208,33 +211,33 @@ text.search-entry, .search-entry { font-size: 17px; color: @text; caret-color: @
 .search-sub { color: @ov1; font-size: 12px; }
 .search-acts { opacity: 0; }
 .search-row.sel .search-acts { opacity: 1; }
-.search-lead-glyph { min-width: 38px; min-height: 38px; border-radius: 9px; background: alpha(white, 0.06); color: @sub1;
+.search-lead-glyph { min-width: 38px; min-height: 38px; border-radius: 12px; background: alpha(white, 0.06); color: @sub1;
   font-size: 15px; }
-.search-link-glyph { min-width: 46px; min-height: 46px; border-radius: 12px; background: alpha(@teal, 0.15); color: @teal;
+.search-link-glyph { min-width: 46px; min-height: 46px; border-radius: 18px; background: alpha(@teal, 0.15); color: @teal;
   font-size: 20px; }
 .search-foot { padding: 8px 16px; border-top: 1px solid alpha(white, 0.06); font-family: "JetBrainsMono Nerd Font", monospace;
-  font-size: 11px; color: @ov1; background: alpha(@crust, 0.4); border-radius: 0 0 18px 18px; }
+  font-size: 11px; color: @ov1; background: alpha(@crust, 0.4); border-radius: 0 0 24px 24px; }
 
 /* ===== watch: controls over the video ===== */
 .v-top { padding: 14px 18px 36px; background-image: linear-gradient(alpha(black, 0.66), alpha(black, 0)); }
 .v-title { color: white; font-weight: 700; font-size: 16px; }
 .v-meta { color: alpha(white, 0.72); font-size: 12px; }
-.vchip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 7px; background: alpha(black, 0.5); color: white; }
+.vchip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: alpha(black, 0.5); color: white; }
 .vchip.live { color: @red; }
 .v-bottom { padding: 44px 16px 10px; background-image: linear-gradient(alpha(black, 0), alpha(black, 0.78)); }
 button.vbtn { background: none; box-shadow: none; border: none; color: white; min-width: 34px; min-height: 34px;
-  border-radius: 10px; padding: 0; }
+  border-radius: 14px; padding: 0; }
 button.vbtn:hover { background: alpha(white, 0.12); }
 button.vbtn label { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 16px; }
-button.vbtn.big { background: alpha(white, 0.95); color: black; min-width: 38px; min-height: 38px; border-radius: 19px; }
+button.vbtn.big { background: alpha(white, 0.95); color: black; min-width: 38px; min-height: 38px; border-radius: 24px; }
 button.vbtn.on { color: @mauve; }
 .v-time { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 12px; color: alpha(white, 0.88); margin-left: 8px; }
 .v-chapter { color: white; font-size: 12px; }
 .pv { margin-bottom: 70px; }
-.pv-frame { border-radius: 10px; border: 2px solid alpha(white, 0.85); background: black; box-shadow: 0 10px 30px alpha(black, 0.6); }
+.pv-frame { border-radius: 14px; border: 2px solid alpha(white, 0.85); background: black; box-shadow: 0 10px 30px alpha(black, 0.6); }
 .pv-chap { color: white; font-weight: 600; font-size: 12px; text-shadow: 0 1px 4px black; }
 .pv-time { color: alpha(white, 0.8); font-family: "JetBrainsMono Nerd Font", monospace; font-size: 11px; text-shadow: 0 1px 4px black; }
-.zen { margin: 0 24px 22px 0; padding: 5px 11px; border-radius: 9px; background: alpha(black, 0.55); color: alpha(white, 0.92);
+.zen { margin: 0 24px 22px 0; padding: 5px 11px; border-radius: 12px; background: alpha(black, 0.55); color: alpha(white, 0.92);
   font-family: "JetBrainsMono Nerd Font", monospace; font-size: 12.5px; }
 .side-tabs { padding: 12px 12px 6px; }
 .chapter-row { padding: 6px 8px; }
@@ -243,11 +246,11 @@ button.vbtn.on { color: @mauve; }
 .info { color: @sub1; font-size: 12.5px; }
 
 /* ===== settings menu (Q) ===== */
-.menu { color: @text; background: alpha(@crust, 0.96); border: 1px solid alpha(@mauve, 0.35); border-radius: 14px; padding: 8px;
+.menu { color: @text; background: alpha(@crust, 0.96); border: 1px solid alpha(@mauve, 0.35); border-radius: 20px; padding: 8px;
   min-width: 300px; box-shadow: 0 18px 50px alpha(black, 0.6); }
 .menu-title { font-weight: 700; font-size: 13px; padding: 4px 10px 2px; color: @text; }
 .menu-note { padding: 0 10px 4px; font-size: 11.5px; }
-.menu-row { padding: 8px 12px; border-radius: 10px; }
+.menu-row { padding: 8px 12px; border-radius: 14px; }
 .menu-row.sel { background: alpha(@mauve, 0.15); }
 .menu-name { color: @text; font-size: 13px; }
 .menu-value { color: @sub0; font-size: 12.5px; }
@@ -261,12 +264,12 @@ button.vbtn.on { color: @mauve; }
 .grid-page { padding: 0 14px 20px; }
 .grid-title { font-size: 15px; font-weight: 700; padding: 16px 8px 8px; }
 flowbox.grid flowboxchild { padding: 0; background: none; }
-.card { padding: 6px; border-radius: 14px; border: 1px solid transparent; }
+.card { padding: 6px; border-radius: 20px; border: 1px solid transparent; }
 .card:hover { background: alpha(white, 0.03); }
 .card.sel { background: alpha(@mauve, 0.12); border-color: alpha(@mauve, 0.45); }
 .card-title { font-weight: 600; font-size: 13px; margin-top: 4px; }
 .card-sub { color: @ov1; font-size: 11.5px; }
-.card-dur { margin: 0 6px 7px 0; padding: 1px 5px; border-radius: 5px; background: alpha(black, 0.75); color: white;
+.card-dur { margin: 0 6px 7px 0; padding: 1px 5px; border-radius: 8px; background: alpha(black, 0.75); color: white;
   font-family: "JetBrainsMono Nerd Font", monospace; font-size: 10.5px; }
 .folder-tile { background: alpha(@yellow, 0.07); border: 1px solid alpha(@yellow, 0.18); }
 .folder-big { font-size: 40px; color: @yellow; }
@@ -280,7 +283,7 @@ flowbox.grid flowboxchild { padding: 0; background: none; }
 .palette-entry { font-size: 14px; padding: 6px 4px; }
 
 /* the loading screen (Loader): from pressing play until the picture moves */
-.loader { border-radius: 14px; }
+.loader { border-radius: 20px; }
 .drishya-root.full .loader { border-radius: 0; }
 .loader-backdrop { opacity: 0.5; }
 .loader-scrim { background-image: radial-gradient(circle, alpha(black, 0.55), alpha(black, 0.82)); }
@@ -302,7 +305,7 @@ scale.vslide slider { min-width: 10px; min-height: 10px; margin: -4px; border-ra
 
 /* the four layouts of Watch (T switches) */
 /* dock and study: the controls in a solid dock under the video, always there */
-.dock { margin-top: 8px; padding: 4px 10px 6px; border-radius: 14px; background: alpha(@crust, 0.55); border: 1px solid alpha(white, 0.06); }
+.dock { margin-top: 8px; padding: 4px 10px 6px; border-radius: 20px; background: alpha(@crust, 0.55); border: 1px solid alpha(white, 0.06); }
 .v-bottom.docked { padding: 4px 2px 0; background-image: none; }
 .v-bottom.docked button.vbtn { color: @text; }
 .v-bottom.docked button.vbtn.big { background: @mauve; color: @crust; }
@@ -311,11 +314,11 @@ scale.vslide slider { min-width: 10px; min-height: 10px; margin: -4px; border-ra
 .v-bottom.docked .v-level { color: @sub0; }
 .v-bottom.docked scale.vslide trough { background: alpha(@text, 0.18); }
 .v-bottom.docked scale.vslide highlight, .v-bottom.docked scale.vslide slider { background: @mauve; }
-.layout-dock .side { border-left: none; border-top: 1px solid alpha(white, 0.06); margin-top: 8px; border-radius: 14px; }
-.layout-study .side { border-radius: 14px; margin-left: 8px; }
+.layout-dock .side { border-left: none; border-top: 1px solid alpha(white, 0.06); margin-top: 8px; border-radius: 20px; }
+.layout-study .side { border-radius: 20px; margin-left: 8px; }
 /* the dock's Up next: cards side by side */
 .shelf { padding: 4px 6px; }
-.shelf-card { padding: 6px; border-radius: 12px; }
+.shelf-card { padding: 6px; border-radius: 18px; }
 .shelf-card .t { font-size: 12px; font-weight: 600; color: @text; }
 .shelf-card .a { font-size: 11px; color: @ov1; }
 .shelf-card.sel { background: alpha(@mauve, 0.16); }
