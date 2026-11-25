@@ -2,6 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
+## Unreleased
+
+- The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.
+
 ## v0.4.0 -- 2026-11-17
 
 - `:q` closes drishya instead of hiding it (it saves where you were first); `:hide` hides, and `q` / `Esc`
