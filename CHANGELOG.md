@@ -4,6 +4,10 @@ Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.p
 
 ## Unreleased
 
+- Quieter when idle: the 5 s position save runs only while something plays (it woke the player all day, paused, hidden or empty). Your place is still saved when you pause, when a seek lands (paused too, which wasn't saved before), when you stop, close the window or quit, and every 5 s while playing (on disk every 30 s, as before; the 30 s write sometimes slipped to 35 s).
+- Back on the video you were on: `queue.json` records which one was current (an autoplay pick too), so after a restart play resumes that video where you were, not the first in the queue. Removing it before you play it doesn't start the next one.
+- mpv starts when it's first needed (the window, or something to play) and stops again when nothing is loaded and no window is on screen: its network thread (`curl`) woke the player once a second all day. Idle with nothing loaded: about 155 context switches per two minutes before, none now. While a video is loaded (paused and hidden) mpv stays, so it comes back at once: about 160 before, 138 now, nearly all mpv's own thread.
+
 - The website, closer to Vayu's own: the tool's screenshot blurred behind the page, a centred hero with the logo and the verse, the page you're on as the white pill, glass "On this page" and footer panels, releases as cards. No glow behind the logo, no coloured line beside the verse.
 - **Spatial look**: the window is graphite glass with a lit top edge and 28 px corners (sway's rule matches), rounder controls throughout; where you are is near-white (the theme's accent). Without varna, the colours are Vayu's Spatial palette.
 - The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.

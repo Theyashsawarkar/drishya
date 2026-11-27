@@ -43,6 +43,30 @@ def save_json(path, data):
     os.replace(tmp, path)
 
 
+QUEUE_MAX = 500
+
+
+def queue_to_disk(queue, cur):
+    """The queue as queue.json keeps it: your videos (not autoplay's, unless
+    it's the one you're on), the last QUEUE_MAX, the current one marked so a
+    restart comes back on it."""
+    current = queue[cur] if 0 <= cur < len(queue) else None
+    return [dict({k: v for k, v in it.items() if k not in ("id", "pending", "current")},
+                 **({"current": True} if it is current else {}))
+            for it in queue if not it.get("auto") or it is current][-QUEUE_MAX:]
+
+
+def queue_from_disk(items):
+    """queue.json read back: (the items, without the mark; the index of the
+    current one, or -1)."""
+    items = [dict(it) for it in items if isinstance(it, dict) and (it.get("yt") or it.get("file"))]
+    cur = -1
+    for i, it in enumerate(items):
+        if it.pop("current", False) and cur < 0:
+            cur = i
+    return items, cur
+
+
 def is_finished(pos, duration):
     if not duration:
         return False

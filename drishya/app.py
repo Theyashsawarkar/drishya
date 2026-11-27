@@ -49,6 +49,21 @@ class App(Gtk.Application):
         # The window exists from the start (hidden), so its video surface
         # is ready the moment something plays.
         self.ensure_window()
+        # Nothing loaded and nothing on screen: mpv goes (see Core.release_player).
+        self._release_id = None
+        self.core.listen(lambda e: e in ("player", "video") and self.release_soon())
+
+    def release_soon(self, *_):
+        """Stops mpv once nothing is loaded and no window shows video: from
+        the main loop, never inside one of mpv's own events."""
+        if self._release_id is None and self.core.player is not None and self.core.idle:
+            self._release_id = GLib.idle_add(self._release)
+
+    def _release(self):
+        self._release_id = None
+        if not self.quitting and not any(w is not None and w.get_visible() for w in (self.window, self.mini)):
+            self.core.release_player()
+        return False
 
     def do_activate(self):
         pass   # started by `drishya daemon`; windows open through the actions

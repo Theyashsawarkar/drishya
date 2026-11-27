@@ -777,6 +777,7 @@ class Window(Gtk.ApplicationWindow):
             self.core.restore_system()   # volume and brightness as they were before
             if self.core.conf["pause_on_hide"]:
                 self.core.pause()
+            self.app.release_soon()   # nothing loaded: mpv goes until it's needed
 
     def adjust(self, what, delta):
         """The system volume or the screen's brightness (put back when the

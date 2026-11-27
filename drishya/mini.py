@@ -109,6 +109,7 @@ class Mini(Gtk.Window):
         self.area.detach()
         self.core.pause()
         self.core.restore_system()   # volume and brightness as they were before
+        self.app.release_soon()
 
     def _key(self, _c, keyval, _code, state):
         name = Gdk.keyval_name(keyval) or ""

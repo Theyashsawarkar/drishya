@@ -69,6 +69,32 @@ class Resume(unittest.TestCase):
         s2.forget("yt:abcdefghijk")
         self.assertIsNone(s2.entry(it))
 
+    def test_queue_keeps_the_current_video(self):
+        q = [{"id": 1, "yt": "aaaaaaaaaaa"}, {"id": 2, "yt": "bbbbbbbbbbb", "auto": True, "pending": True},
+             {"id": 3, "file": "/v/c.mkv"}, {"id": 4, "yt": "ddddddddddd", "auto": True}]
+        disk = store.queue_to_disk(q, 1)   # on an autoplay pick: it's kept, the other one isn't
+        self.assertEqual(disk, [{"yt": "aaaaaaaaaaa"}, {"yt": "bbbbbbbbbbb", "auto": True, "current": True},
+                                {"file": "/v/c.mkv"}])
+        self.assertNotIn("current", q[1])          # the queue itself isn't marked
+        items, cur = store.queue_from_disk(disk)
+        self.assertEqual(cur, 1)
+        self.assertEqual(items[1], {"yt": "bbbbbbbbbbb", "auto": True})
+        # nothing current: nothing marked, nothing of autoplay's kept
+        self.assertEqual(store.queue_from_disk(store.queue_to_disk(q, -1)),
+                         ([{"yt": "aaaaaaaaaaa"}, {"file": "/v/c.mkv"}], -1))
+
+    def test_queue_from_disk_skips_junk(self):
+        items, cur = store.queue_from_disk([1, {"title": "no source", "current": True},
+                                            {"yt": "aaaaaaaaaaa"}, {"file": "/v/b.mkv", "current": True}])
+        self.assertEqual((items, cur), ([{"yt": "aaaaaaaaaaa"}, {"file": "/v/b.mkv"}], 1))
+        self.assertEqual(store.queue_from_disk([]), ([], -1))
+
+    def test_queue_keeps_the_last_500(self):
+        q = [{"id": i, "file": f"/v/{i}.mkv"} for i in range(600)]
+        disk = store.queue_to_disk(q, 599)
+        self.assertEqual(len(disk), store.QUEUE_MAX)
+        self.assertEqual(store.queue_from_disk(disk)[1], store.QUEUE_MAX - 1)
+
     def test_downloads_need_the_file(self):
         d = tempfile.mkdtemp()
         s = store.Store(d)

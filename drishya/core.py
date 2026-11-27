@@ -56,9 +56,11 @@ class Core:
         self._boards = {}             # yt id -> its storyboard (preview frames), None when it has none
         self._details = {}            # yt id -> description etc. (asked once, for Info)
         self._asking = set()
-        self.queue = [dict(it, id=next(_ids)) for it in store.load_json(os.path.join(config.STATE, "queue.json"), [])
-                      if isinstance(it, dict) and (it.get("yt") or it.get("file"))]
-        self.cur = -1
+        # The video you were on comes back (not loaded): play picks it up
+        # where you were (resume), after a restart too.
+        items, self.cur = store.queue_from_disk(store.load_json(os.path.join(config.STATE, "queue.json"), []))
+        self.queue = [dict(it, id=next(_ids)) for it in items]
+        self._restored = self.cur >= 0   # current, but not loaded until you play it
         self.undo_stack, self.redo_stack = [], []
         self.window_visible = False
         # playback state, from mpv's properties
@@ -95,20 +97,19 @@ class Core:
         self.render_ready = False
         self._pending = None          # a load waiting for the renderer
         self._last_save = 0
+        self._tick_id = None          # the 5 s position save: only while something plays
+        self._seeking = False         # a seek asked for: its place is saved once mpv is there
         self.player = None
         self._resume_vid = None
         self.logins = {}              # host -> {"user", "password"} or {"cookies": browser}; memory only
         self._login_needed = None     # (kind, message) seen in mpv's log for the video being opened
         self._login_quiet_until = 0.0
+        # mpv starts when it's first needed (a window to show video in, or
+        # something to play) and goes again when nothing is loaded and
+        # nothing is on screen: its network thread wakes every second.
         self.player_error = mpv.available()
-        if self.player_error is None:
-            try:
-                self._start_mpv()
-            except mpv.MPVError as e:
-                self.player_error = str(e)
         if self.player_error:
             log.error("no player: %s", self.player_error)
-        GLib.timeout_add_seconds(5, self._save_tick)
         for vid in {it["yt"] for it in self.queue if it.get("yt") and it.get("title") == "YouTube video"}:
             self._fill_in(vid)   # opened by link before its details came
 
@@ -140,6 +141,30 @@ class Core:
             if then:
                 GLib.idle_add(lambda: (then(r), False)[1])
         self.pool.submit(work).add_done_callback(done)
+
+    def ensure_player(self):
+        """mpv, started if it isn't (False: it can't be)."""
+        if self.player is None and self.player_error is None:
+            try:
+                self._start_mpv()
+            except mpv.MPVError as e:
+                self.player_error = str(e)
+                log.error("no player: %s", e)
+        return self.player is not None
+
+    def release_player(self):
+        """Nothing loaded, nothing about to load, nothing on screen (the
+        app checks that): mpv goes, so an idle drishya doesn't wake. The
+        next window or play starts it again."""
+        if self.player is None or not self.idle or self._pending is not None or self.stage is not None:
+            return False
+        if self.surface is not None:
+            self.surface.detach()      # mpv frees its GL objects while the context exists
+        self.player.terminate()
+        self.player = None
+        self.render_ready, self.paused, self._started = False, True, False
+        log.debug("nothing loaded or shown: mpv stopped until it's needed")
+        return True
 
     def _start_mpv(self):
         c = self.conf
@@ -196,11 +221,13 @@ class Core:
                 if self.paused and self._started and self.stage in ("buffering", "stalled"):
                     self._set_stage(None)           # you paused it: the pause sign says so
                 self._save_position()
+                self._update_tick()
                 self.emit("player")
             elif prop == "idle-active":
                 self.idle = bool(v)
                 if self.idle:
                     self._set_stage(None)
+                self._update_tick()
                 self.emit("player")
             elif prop == "eof-reached":
                 if v:
@@ -255,6 +282,7 @@ class Core:
             if self.stage == "finding":
                 self._set_stage("buffering")
             self._pick_variant()
+            self._update_tick()
             self.emit("player", "tracks")
             self._prefetch_next()
         elif name == "end-file":
@@ -284,8 +312,16 @@ class Core:
         elif name == "restart":
             self.buffering = False
             self._started, self._moved_from = True, None
+            if self._seeking:          # a seek landed (paused too): its place is saved now
+                self._seeking = False
+                self.pos = self.player.get("time-pos", self.pos) or self.pos
+                if self.paused:
+                    self._save_position()   # to disk: no tick runs while paused
+                elif self.current is not None and self.duration and not self.current.get("live"):
+                    self.store.touch(self.current, pos=self.pos, duration=self.duration)
             if self.paused:
                 self._set_stage(None)
+            self._update_tick()   # playing: a load or a seek that didn't change pause
             self.emit("buffering", "player")
         elif name == "log":
             level, text = data
@@ -313,7 +349,7 @@ class Core:
     # ------------------------------------------------------------ the video surface
     def attach_surface(self, area):
         """area (a VideoArea, its GL context current) now shows the video."""
-        if self.player is None:
+        if not self.ensure_player():
             return False
         if self.surface is not None and self.surface is not area:
             self.surface.detach()
@@ -538,8 +574,7 @@ class Core:
         self._changed(undoable=False)
 
     def _save_queue(self):
-        keep = [{k: v for k, v in it.items() if k not in ("id", "pending")} for it in self.queue
-                if not it.get("auto")][-500:]
+        keep = store.queue_to_disk(self.queue, self.cur)
         try:
             store.save_json(os.path.join(config.STATE, "queue.json"), keep)
         except OSError as e:
@@ -648,10 +683,12 @@ class Core:
         self._changed(before=before)
         if playing_removed:
             # what came after the removed video plays in its place, if anything did
-            if first < len(self.queue):
+            # (the video you were on, back after a restart but not loaded: none plays)
+            if first < len(self.queue) and not self._restored:
                 self.play_index(first)
             else:
                 self.cur = -1
+                self._save_queue()
                 if self.player:
                     self.player.command("stop")
                 self.emit("video", "player")
@@ -711,13 +748,14 @@ class Core:
         return youtube.watch_url(it["yt"])
 
     def play_index(self, i, start=None):
-        if self.player is None:
+        if not self.ensure_player():
             self.toast(f"Can't play: {self.player_error}")
             return
         if not (0 <= i < len(self.queue)):
             return
         self._save_position()
-        self.cur = i
+        self.cur, self._restored = i, False
+        self._save_queue()   # which video is current, on disk at once
         it = self.queue[i]
         if start is None and self.conf["resume"] and not it.get("live"):
             start = store.resume_at(self.store.entry(it), it.get("duration"))
@@ -741,7 +779,7 @@ class Core:
         self._login_needed = None
         if src.startswith(("http://", "https://")):
             src = self._with_login(src, opts)
-        self._started, self._moved_from = False, None
+        self._started, self._moved_from, self._seeking = False, None, False
         self._set_stage("finding")
         self.player.loadfile(src, "replace", opts)
         self.player.set("pause", False)
@@ -809,7 +847,7 @@ class Core:
         self.bg(lambda: auth.forget(host))
 
     def toggle(self):
-        if self.player is None:
+        if not self.ensure_player():
             return
         if self.current is None:
             if self.queue:
@@ -828,10 +866,12 @@ class Core:
 
     def seek(self, secs):
         if self.player is not None and self.current is not None:
+            self._seeking = True
             self.player.command("seek", f"{secs:+.2f}", "relative+exact" if abs(secs) < 10 else "relative")
 
     def seek_to(self, secs):
         if self.player is not None and self.current is not None:
+            self._seeking = True
             self.player.command("seek", f"{max(0, secs):.2f}", "absolute")
 
     def next(self, n=1):
@@ -993,11 +1033,23 @@ class Core:
         self.store.touch(it, pos=self.pos, duration=self.duration)
         self.store.flush()
 
+    @property
+    def playing(self):
+        return self.current is not None and not self.paused and not self.idle
+
+    def _update_tick(self):
+        """The position is saved every 5 s while something plays, and the
+        timer stops with it: a paused, hidden or empty player doesn't wake."""
+        if self.playing and self._tick_id is None:
+            self._tick_id = GLib.timeout_add_seconds(5, self._save_tick)
+
     def _save_tick(self):
-        if self.current is not None and not self.paused and not self.idle and self.duration \
-                and not self.current.get("live"):
+        if not self.playing:
+            self._tick_id = None
+            return False
+        if self.duration and not self.current.get("live"):
             self.store.touch(self.current, pos=self.pos, duration=self.duration)
-            if time.monotonic() - self._last_save > 30:
+            if time.monotonic() - self._last_save > 29:   # every 6th tick (timers drift a little)
                 self._last_save = time.monotonic()
                 self.store.flush()
                 self.emit("history")

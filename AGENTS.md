@@ -21,6 +21,11 @@ apply); it must work on any Linux desktop without Vayu.
 - One renderer at a time: a `VideoArea` attaches (takes mpv's render
   context) and detaches; never draw from two. Load only once a renderer
   exists (mpv's VO fails otherwise).
+- Idle costs nothing: mpv starts when first needed (`Core.ensure_player`:
+  a window to show video, or a play) and stops when nothing is loaded and
+  no window is on screen (`release_player`; its curl thread wakes every
+  second); the 5 s position save runs only while something plays. No
+  timer may run while paused, hidden or empty.
 - Never block the GTK main loop; never log or save a password; links are
   saved without their credentials.
 - Every key is a bind in `drishya/keymap.py` (data on Vyom's `keys.py`, vendored as `drishya/keys.py`: update it with Vyom's `scripts/vendor-keys.sh`, never by hand); the Space grammar is the one every Vayu tool shares. After changing a key run `python3 scripts/keybinds.py`: it writes the `# keybind: Drishya/<scope>:<mode> | <keys> | <Verb> ...` lines
