@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.py`.
 
-## Unreleased
+## v0.5.0 -- 2026-11-28
 
 - Website: pranali joins the family list in the footer; the site builder passes ruff.
 - Quieter when idle: the 5 s position save runs only while something plays (it woke the player all day, paused, hidden or empty). Your place is still saved when you pause, when a seek lands (paused too, which wasn't saved before), when you stop, close the window or quit, and every 5 s while playing (on disk every 30 s, as before; the 30 s write sometimes slipped to 35 s).
