@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`) with `VERSION` in `drishya/__init__.p
 
 ## Unreleased
 
+- Website: pranali joins the family list in the footer; the site builder passes ruff.
 - Quieter when idle: the 5 s position save runs only while something plays (it woke the player all day, paused, hidden or empty). Your place is still saved when you pause, when a seek lands (paused too, which wasn't saved before), when you stop, close the window or quit, and every 5 s while playing (on disk every 30 s, as before; the 30 s write sometimes slipped to 35 s).
 - Back on the video you were on: `queue.json` records which one was current (an autoplay pick too), so after a restart play resumes that video where you were, not the first in the queue. Removing it before you play it doesn't start the next one.
 - mpv starts when it's first needed (the window, or something to play) and stops again when nothing is loaded and no window is on screen: its network thread (`curl`) woke the player once a second all day. Idle with nothing loaded: about 155 context switches per two minutes before, none now. While a video is loaded (paused and hidden) mpv stays, so it comes back at once: about 160 before, 138 now, nearly all mpv's own thread.
